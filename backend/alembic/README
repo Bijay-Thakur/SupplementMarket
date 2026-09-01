@@ -1,0 +1,6 @@
+Alembic migrations for the Bronxville Natural Market local demo backend.
+
+Common commands (run from the backend/ directory with the venv active):
+  python -m alembic revision --autogenerate -m "message"
+  python -m alembic upgrade head
+  python -m alembic downgrade -1

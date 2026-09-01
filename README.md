@@ -1,36 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bronxville Natural Market
 
-## Getting Started
+Demonstration ecommerce site for **Bronxville Natural Market**  
+86 Pondfield Road, Bronxville, NY 10708
 
-First, run the development server:
+Customer storefront for vitamins and supplements, plus a demo admin portal. Shoppers can browse the catalog, search, filter, add to cart, and submit a **pickup or local-delivery order request**. Card payment is not enabled yet.
 
-```bash
+This is a **client demo**, not live inventory. Product photos come from official manufacturer pages and are labeled for demo review. Prices are demonstration pricing, not shelf prices. The store phone number is not shown until the owner supplies a verified number.
+
+## Live demo (Vercel)
+
+The app is a self-contained [Next.js](https://nextjs.org/) project. No Python, Stripe, or Supabase keys are required.
+
+1. Open [vercel.com/new](https://vercel.com/new)
+2. Import this GitHub repository: [Bijay-Thakur/SupplementMarket](https://github.com/Bijay-Thakur/SupplementMarket)
+3. Leave environment variables empty
+4. Click **Deploy**
+
+After the first deploy, optionally set `NEXT_PUBLIC_SITE_URL` to the Vercel domain (for example `https://your-app.vercel.app`).
+
+| Surface | Path |
+| --- | --- |
+| Storefront | `/` |
+| Catalog | `/products` |
+| Admin | `/admin` |
+
+The first visit shows a Customer / Admin role chooser. **It is not authentication.** Anyone with the URL can open `/admin`. Do not put real customer data in this demo.
+
+## What’s in the catalog
+
+- **56 products** from official manufacturer sites (Nature’s Way, MegaFood, MaryRuth’s, Twinlab, Gaia Herbs, NaturesPlus, Bluebonnet, Vital Planet)
+- Every storefront product has a manufacturer package photo
+- Search understands common vitamin names and wellness-support phrases (for example `d3`, `omega 3`, `sleep`, `turmeric`)
+- Brands that block crawlers (Solgar, NOW Foods, Garden of Life, Life Extension) were skipped — products were never invented
+
+Images remain **permission-pending**. They are for local/demo review until the store has written manufacturer permission or an authorized asset feed.
+
+## Local development
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Storefront: http://localhost:3000
+- Admin: http://localhost:3000/admin
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`npm run dev` is enough for the walkthrough. Python is only needed if you collect more manufacturer products later.
 
-## Learn More
+### Walkthrough for the store owner
 
-To learn more about Next.js, take a look at the following resources:
+1. Choose **Customer**
+2. Search (try `turmeric`, `zinc`, or `probiotic`)
+3. Open a product, add to cart, checkout as **store pickup**
+4. Switch to **Admin** and open Products, Orders, and Store settings
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Admin
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+From `/admin` you can:
 
-## Deploy on Vercel
+- View dashboard stats
+- Edit products, prices, and availability
+- Add brands, categories, and tags
+- Review demo orders and update status
+- Edit announcement, hours note, pickup, and delivery copy
+- Preview a CSV import
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Store settings will not invent a phone number. If the owner has not provided one, the UI says the phone is not configured.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Live manufacturer re-collection (`npm run catalog:collect`) needs the optional Python backend. The hosted demo already includes the imported official catalog.
+
+## Stack
+
+- **App:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4
+- **Hosted demo API:** Next.js Route Handlers + bundled `src/data/catalog.json` (works on Vercel)
+- **Optional collector:** FastAPI + SQLite, for robots-respecting manufacturer catalog imports
+- **Later launch:** Supabase (auth/database) and Stripe (payments) are scaffolded but unused in this demo
+
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Next.js on port 3000 (demo API included) |
+| `npm run build` / `npm start` | Production build and server |
+| `npm run lint` / `typecheck` | Frontend quality checks |
+| `npm test` | Vitest unit tests |
+| `npm run test:e2e` | Playwright |
+| `npm run dev:all` | Next.js + FastAPI collector on :8000 |
+| `npm run catalog:collect` | Collect official products into staging (Python) |
+| `npm run catalog:export` | Export the demo snapshot used on Vercel |
+
+## Project layout
+
+```
+src/app/(public)/     Storefront routes
+src/app/(admin)/      Admin routes (no-index)
+src/app/api/v1/       Bundled demo API for Vercel
+src/components/       UI, catalog, cart, admin
+src/data/catalog.json Bundled official catalog
+public/brand/         Store logo (source of truth)
+public/media/         Optimized product photos
+backend/              Optional FastAPI collector
+docs/                 Implementation notes
+```
+
+## Brand
+
+The official logo is never redrawn. Source file:
+
+`public/brand/bronxville-natural-market-logo-source.png`
+
+Web derivatives are generated with `npm run logo:optimize`.
+
+## Health disclaimer
+
+These statements have not been evaluated by the Food and Drug Administration. Products are not intended to diagnose, treat, cure, or prevent any disease.
+
+## License
+
+Private demonstration for Bronxville Natural Market. Product names, packaging, and photos remain the property of their respective manufacturers.
