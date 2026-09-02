@@ -27,19 +27,32 @@ import {
   listCatalogImports,
   listCategories,
   listOrders,
+  listOrdersForUser,
   listProducts,
   listPromotions,
   listTags,
   patchCatalogSource,
   patchSettings,
   previewCsv,
+  recordAudit,
   relatedFor,
   resetDemoStore,
   suggestions,
+  updateBrand,
   updateOrderStatus,
   updateProduct,
 } from "@/lib/demo-store/engine";
 import type { ProductQuery } from "@/lib/api/types";
+import { getUserFromRequest, requireAdmin, requireUser } from "@/lib/auth/server";
+import {
+  deleteAddress,
+  getMockProfile,
+  listAddresses,
+  putMockProfile,
+  saveAddress,
+  usernameTaken,
+} from "@/lib/auth/mock-store";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +113,22 @@ function join(path: string[]) {
   return path.join("/");
 }
 
+async function audit(req: NextRequest, action: string, entityType: string, entityId: string | number | null, summary: string) {
+  try {
+    const user = await getUserFromRequest(req);
+    recordAudit({
+      actor_user_id: user?.id ?? null,
+      action,
+      entity_type: entityType,
+      entity_id: entityId == null ? null : String(entityId),
+      summary,
+      request_id: req.headers.get("x-request-id") ?? req.headers.get("x-vercel-id"),
+    });
+  } catch {
+    /* never fail the mutation because audit logging failed */
+  }
+}
+
 export async function GET(req: NextRequest, ctx: Ctx) {
   try {
     const { path } = await ctx.params;
@@ -122,6 +151,23 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     if (path[0] === "orders" && path.length === 2) return json(getOrderByToken(path[1]));
 
+    if (key === "account/profile") {
+      const user = await requireUser(req);
+      const profile = getMockProfile(user.id) ?? user;
+      return json({ user: profile, addresses: listAddresses(user.id) });
+    }
+    if (key === "account/addresses") {
+      const user = await requireUser(req);
+      return json(listAddresses(user.id));
+    }
+    if (key === "account/orders") {
+      const user = await requireUser(req);
+      return json({ items: listOrdersForUser(user.id) });
+    }
+
+    if (path[0] === "admin") {
+      await requireAdmin(req);
+    }
     if (key === "admin/dashboard") return json(dashboard());
     if (key === "admin/products") return json(listProducts(productQuery(sp), true));
     if (path[0] === "admin" && path[1] === "products" && path.length === 3 && path[2] !== "bulk-import") {
@@ -168,8 +214,41 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const { path } = await ctx.params;
     const key = join(path);
 
-    if (key === "orders") return json(createOrder(await readJson(req)), 201);
-    if (key === "admin/products") return json(createProduct(await readJson(req)), 201);
+    if (key === "orders") {
+      const user = await getUserFromRequest(req);
+      const body = await readJson(req);
+      if (user) body.user_id = user.id;
+      return json(createOrder(body), 201);
+    }
+    if (key === "account/addresses") {
+      const user = await requireUser(req);
+      const body = await readJson(req);
+      const now = new Date().toISOString();
+      const address = saveAddress(user.id, {
+        id: randomUUID(),
+        userId: user.id,
+        label: String(body.label ?? "Saved address"),
+        recipientName: String(body.recipientName ?? body.recipient_name ?? ""),
+        phone: (body.phone as string) ?? null,
+        addressLine1: String(body.addressLine1 ?? body.address_line1 ?? ""),
+        addressLine2: (body.addressLine2 as string) ?? (body.address_line2 as string) ?? null,
+        city: String(body.city ?? ""),
+        state: String(body.state ?? ""),
+        postalCode: String(body.postalCode ?? body.postal_code ?? ""),
+        countryCode: String(body.countryCode ?? body.country_code ?? "US"),
+        deliveryInstructions: (body.deliveryInstructions as string) ?? (body.delivery_instructions as string) ?? null,
+        isDefault: Boolean(body.isDefault ?? body.is_default),
+        createdAt: now,
+        updatedAt: now,
+      });
+      return json(address, 201);
+    }
+    if (path[0] === "admin") await requireAdmin(req);
+    if (key === "admin/products") {
+      const created = createProduct(await readJson(req));
+      await audit(req, "product.create", "product", created.id, `Created ${created.name}`);
+      return json(created, 201);
+    }
     if (path[0] === "admin" && path[1] === "products" && path[3] === "duplicate") {
       return json(duplicateProduct(Number(path[2])), 201);
     }
@@ -185,7 +264,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const text = file instanceof File ? await file.text() : "";
       return json(commitCsv(text));
     }
-    if (key === "admin/brands") return json(createBrand(await readJson(req) as { name: string }), 201);
+    if (key === "admin/brands") {
+      const created = createBrand((await readJson(req)) as { name: string });
+      await audit(req, "brand.create", "brand", created.id, `Created brand ${created.name}`);
+      return json(created, 201);
+    }
     if (key === "admin/categories") return json(createCategory(await readJson(req) as { name: string }), 201);
     if (key === "admin/tags") return json(createTag(await readJson(req) as { name: string }), 201);
     if (key === "admin/promotions") {
@@ -217,13 +300,69 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const key = join(path);
     const body = await readJson(req);
 
-    if (key === "admin/store-settings") return json(patchSettings(body));
+    if (key === "admin/store-settings") {
+      await requireAdmin(req);
+      const updated = patchSettings(body);
+      await audit(req, "settings.update", "store_settings", 1, "Updated store settings");
+      return json(updated);
+    }
     if (path[0] === "admin" && path[1] === "products" && path.length === 3) {
-      return json(updateProduct(Number(path[2]), body));
+      await requireAdmin(req);
+      const updated = updateProduct(Number(path[2]), body);
+      await audit(req, "product.update", "product", updated.id, `Updated ${updated.name}`);
+      return json(updated);
+    }
+    if (path[0] === "admin" && path[1] === "brands" && path.length === 3) {
+      await requireAdmin(req);
+      const updated = updateBrand(Number(path[2]), body);
+      await audit(req, "brand.update", "brand", updated.id, `Updated brand ${updated.name}`);
+      return json(updated);
     }
     if (path[0] === "admin" && path[1] === "orders" && path[3] === "status") {
-      return json(updateOrderStatus(Number(path[2]), String(body.status ?? "")));
+      await requireAdmin(req);
+      const updated = updateOrderStatus(Number(path[2]), String(body.status ?? ""));
+      await audit(req, "order.status", "order", updated.id, `Status ${updated.status}`);
+      return json(updated);
     }
+    if (key === "account/profile") {
+      const user = await requireUser(req);
+      const current = getMockProfile(user.id) ?? user;
+      if (typeof body.username === "string" && usernameTaken(body.username, user.id)) {
+        throw new ApiHttpError(400, "That username is not available.", "validation", { username: "Taken." });
+      }
+      const next = putMockProfile({
+        ...current,
+        displayName: String(body.displayName ?? body.display_name ?? current.displayName),
+        firstName: String(body.firstName ?? body.first_name ?? current.firstName),
+        lastName: String(body.lastName ?? body.last_name ?? current.lastName),
+        phone: (body.phone as string) ?? current.phone,
+        username: String(body.username ?? current.username),
+        avatarUrl: (body.avatarUrl as string) ?? (body.avatar_url as string) ?? current.avatarUrl,
+        profileCompleted: true,
+      });
+      return json({ user: next });
+    }
+    if (path[0] === "account" && path[1] === "addresses" && path.length === 3) {
+      const user = await requireUser(req);
+      const existing = listAddresses(user.id).find((a) => a.id === path[2]);
+      if (!existing) throw new ApiHttpError(404, "Address not found.", "not_found");
+      const saved = saveAddress(user.id, {
+        ...existing,
+        label: String(body.label ?? existing.label ?? ""),
+        recipientName: String(body.recipientName ?? body.recipient_name ?? existing.recipientName),
+        phone: (body.phone as string) ?? existing.phone,
+        addressLine1: String(body.addressLine1 ?? body.address_line1 ?? existing.addressLine1),
+        addressLine2: (body.addressLine2 as string) ?? existing.addressLine2,
+        city: String(body.city ?? existing.city),
+        state: String(body.state ?? existing.state),
+        postalCode: String(body.postalCode ?? body.postal_code ?? existing.postalCode),
+        deliveryInstructions: (body.deliveryInstructions as string) ?? existing.deliveryInstructions,
+        isDefault: Boolean(body.isDefault ?? body.is_default ?? existing.isDefault),
+        updatedAt: new Date().toISOString(),
+      });
+      return json(saved);
+    }
+    if (path[0] === "admin") await requireAdmin(req);
     if (path[0] === "admin" && path[1] === "catalog-sources" && path.length === 3) {
       return json(patchCatalogSource(Number(path[2]), body));
     }
@@ -237,11 +376,19 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
+export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
     const { path } = await ctx.params;
+    if (path[0] === "account" && path[1] === "addresses" && path.length === 3) {
+      const user = await requireUser(req);
+      deleteAddress(user.id, path[2]);
+      return json({ ok: true });
+    }
     if (path[0] === "admin" && path[1] === "products" && path.length === 3) {
-      return json(archiveProduct(Number(path[2])));
+      await requireAdmin(req);
+      const archived = archiveProduct(Number(path[2]));
+      await audit(req, "product.archive", "product", archived.id, `Archived ${archived.name}`);
+      return json(archived);
     }
     return json({ error: "not_found", detail: "Unknown endpoint." }, 404);
   } catch (err) {

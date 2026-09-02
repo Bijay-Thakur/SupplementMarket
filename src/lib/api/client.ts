@@ -32,7 +32,7 @@ export async function apiFetch<T>(
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(url, { ...init, headers, cache: "no-store" });
+  const res = await fetch(url, { ...init, headers, cache: "no-store", credentials: "include" });
   if (!res.ok) {
     let body: ApiError | null = null;
     try {

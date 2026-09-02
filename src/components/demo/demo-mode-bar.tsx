@@ -20,9 +20,11 @@ export function DemoModeBar() {
         <button
           type="button"
           className="shrink-0 rounded-full border border-white/30 px-3 py-1 font-semibold hover:bg-white/10"
-          onClick={() => {
+          onClick={async () => {
+            await fetch("/api/auth?action=sign-out", { method: "POST", credentials: "include" });
             switchRole();
             router.push("/");
+            router.refresh();
           }}
         >
           Switch role

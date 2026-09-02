@@ -50,6 +50,8 @@ export default function ImportPage() {
         Imported rows enter a review state (inactive) until you activate them. Download the
         template, preview, then commit only valid rows.
       </p>
+      {/* File download from the API, not an App Router page. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <a
         className="mt-4 inline-block text-sm font-semibold text-[color:var(--brand-magenta)]"
         href="/api/v1/admin/products/bulk-import/template"

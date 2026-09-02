@@ -9,7 +9,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Brand, Category, Product, ProductTag, Tag
-from app.services.search import expand_terms
+from app.services.search import tokenize_query
 
 DIETARY_KEYS = (
     "vegan",
@@ -92,9 +92,9 @@ def _apply_filters(stmt, pq: ProductQuery):
             stmt = stmt.where(getattr(Product, key).is_(True))
 
     if pq.q:
-        terms = expand_terms(pq.q)
-        if terms:
-            # Subquery of product ids whose tag names match any term.
+        groups = tokenize_query(pq.q)
+        for g in groups:
+            terms = [str(t) for t in g["terms"]]
             tag_match = (
                 select(ProductTag.product_id)
                 .join(Tag, Tag.id == ProductTag.tag_id)

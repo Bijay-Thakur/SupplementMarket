@@ -9,6 +9,7 @@ export default function TaxonomyPage() {
   const cats = useQuery({ queryKey: ["categories"], queryFn: listCategories });
   const tags = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const [brandName, setBrandName] = useState("");
+  const [brandLogo, setBrandLogo] = useState("");
   const [catName, setCatName] = useState("");
   const [tagName, setTagName] = useState("");
 
@@ -20,18 +21,23 @@ export default function TaxonomyPage() {
           className="mt-3 flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            createBrand({ name: brandName }).then(() => {
+            createBrand({ name: brandName, logo_url: brandLogo || null, logo_use_status: "permission_pending" }).then(() => {
               setBrandName("");
+              setBrandLogo("");
               brands.refetch();
             });
           }}
         >
-          <input className="fld" value={brandName} onChange={(e) => setBrandName(e.target.value)} required />
+          <input className="fld" value={brandName} onChange={(e) => setBrandName(e.target.value)} required placeholder="Brand name" />
+          <input className="fld" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="Logo URL (optional)" />
           <button className="h-11 rounded bg-[color:var(--brand-green)] px-3 text-sm text-white">Add</button>
         </form>
         <ul className="mt-4 space-y-1 text-sm">
           {(brands.data ?? []).map((b) => (
-            <li key={b.id}>{b.name}</li>
+            <li key={b.id}>
+              {b.name}
+              {b.logo_url ? " · logo set" : ""}
+            </li>
           ))}
         </ul>
       </section>

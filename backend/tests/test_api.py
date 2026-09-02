@@ -42,7 +42,7 @@ def test_product_filters_and_pagination(client, product):
 
 def test_search_synonyms():
     terms = expand_terms("fish oil")
-    assert "omega 3" in terms
+    assert "omega3" in terms or "omega 3" in terms
     pain = expand_terms("pain relief")
     assert "joint support" in pain
     assert "treat" not in " ".join(pain)

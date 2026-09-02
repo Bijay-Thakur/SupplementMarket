@@ -267,15 +267,18 @@ def seed_demo(db: Session, *, reset: bool = True) -> dict[str, int]:
         db.add(p)
         count += 1
 
-    # Store settings (phone remains an explicit placeholder).
+    # Store settings (owner-verified contact).
     if db.get(StoreSettings, 1) is None:
         db.add(
             StoreSettings(
                 id=1,
-                phone=None,
-                phone_is_placeholder=True,
-                announcement="Demo storefront — product data is placeholder seed content.",
-                pickup_instructions="Pickup available during store hours (owner to confirm).",
+                phone="+19147793552",
+                phone_is_placeholder=False,
+                email="bronxvillenatural@gmail.com",
+                address_line1="86 Pondfield Rd",
+                hours_note="Monday–Saturday, 9 AM–7 PM. Sunday, 10 AM–6 PM.",
+                announcement="Demo storefront — product photos are for demonstration. Prices shown are demo pricing.",
+                pickup_instructions="We'll confirm when your order is ready for pickup at 86 Pondfield Rd.",
                 delivery_note="Local delivery availability and fees are confirmed by the store.",
             )
         )

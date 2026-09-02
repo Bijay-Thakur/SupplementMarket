@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, CircleUserRound } from "lucide-react";
 import { PRIMARY_NAV } from "@/lib/config/navigation";
+import { features } from "@/lib/config/features";
 
 /**
  * Mobile navigation slide-over. Focus is moved into the panel on open, Escape
@@ -83,6 +84,16 @@ export function MobileNav() {
                   {item.label}
                 </Link>
               ))}
+              {(features.mockAuth || features.customerAuth) && (
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="inline-flex items-center gap-3 rounded-[--radius] px-3 py-3 text-[color:var(--brand-ink)] hover:bg-[color:var(--brand-cream)]"
+                  aria-label="Account"
+                >
+                  <CircleUserRound className="h-5 w-5" aria-hidden />
+                </Link>
+              )}
             </nav>
           </div>
         </div>

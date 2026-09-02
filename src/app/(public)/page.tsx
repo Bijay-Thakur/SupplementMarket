@@ -101,8 +101,6 @@ export default function HomePage() {
             </h2>
             <p className="mt-3 max-w-prose text-[color:var(--muted)]">
               Visit us in person for personalized guidance from our team.
-              Store hours and details are managed by the owner and shown here
-              once verified.
             </p>
             <p className="mt-6 flex items-start gap-2 text-[color:var(--brand-ink)]">
               <MapPin

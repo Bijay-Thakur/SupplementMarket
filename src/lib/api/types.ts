@@ -78,6 +78,12 @@ export type Brand = {
   slug: string;
   description: string | null;
   is_featured: boolean;
+  logo_url?: string | null;
+  logo_alt?: string | null;
+  official_website_url?: string | null;
+  logo_use_status?: "permission_pending" | "approved" | "unavailable" | string | null;
+  logo_background?: string | null;
+  display_order?: number;
 };
 
 export type Category = {
@@ -114,6 +120,9 @@ export type OrderPublic = {
   order_number: string;
   status: string;
   fulfillment_type: string;
+  payment_method?: string;
+  payment_status?: string;
+  currency?: string;
   customer_name: string;
   subtotal_cents: number;
   delivery_fee_cents: number | null;
@@ -127,6 +136,15 @@ export type OrderPublic = {
     line_total_cents: number;
   }[];
   created_at: string | null;
+  persistence?: "session" | "database";
+};
+
+export type SuggestionItem = {
+  type: "product" | "brand" | "category" | "recent";
+  name: string;
+  slug?: string;
+  href: string;
+  brand_name?: string;
 };
 
 export type AdminProductRow = {
@@ -166,17 +184,27 @@ export type AdminOrderRow = {
 
 export type AdminOrderDetail = AdminOrderRow & {
   public_token: string;
+  user_id?: string | null;
   customer_email: string;
   customer_phone: string;
   delivery_address_line1: string | null;
+  delivery_address_line2?: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
   delivery_zip: string | null;
   delivery_instructions: string | null;
+  payment_method?: string;
+  payment_status?: string;
+  currency?: string;
+  stripe_checkout_session_id?: string | null;
+  stripe_payment_intent_id?: string | null;
   subtotal_cents: number;
   delivery_fee_cents: number | null;
   notes: string | null;
   items: OrderPublic["items"];
+  placed_at?: string | null;
+  paid_at?: string | null;
+  cancelled_at?: string | null;
 };
 
 export type ProductQuery = {

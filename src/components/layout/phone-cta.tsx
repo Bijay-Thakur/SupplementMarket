@@ -3,9 +3,9 @@ import { DEFAULT_STORE_CONFIG } from "@/lib/config/store";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Click-to-call CTA. Renders a real `tel:` link only when a verified phone is
- * configured; otherwise shows a clearly-labeled, disabled placeholder so we
- * never present an unverified number as the store line.
+ * Click-to-call CTA. Uses the owner-verified store number when configured;
+ * otherwise shows a clearly-labeled disabled state so an unverified number is
+ * never presented as the store line.
  */
 export function PhoneCta({ className }: { className?: string }) {
   const { contact } = DEFAULT_STORE_CONFIG;

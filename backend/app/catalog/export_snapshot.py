@@ -150,15 +150,19 @@ def polish_catalog(db) -> None:
     settings = db.get(StoreSettings, 1)
     if settings:
         settings.announcement = (
-            "Demonstration catalog for Bronxville Natural Market — 86 Pondfield Road. "
+            "Demonstration catalog for Bronxville Natural Market — 86 Pondfield Rd. "
             "Prices shown are demo pricing, not the store’s shelf prices."
         )
         settings.hours_note = (
-            "Visit us at 86 Pondfield Road, Bronxville, or ask the team for current hours."
+            "Monday–Saturday, 9 AM–7 PM. Sunday, 10 AM–6 PM."
         )
         settings.pickup_instructions = (
-            "We’ll confirm when your order is ready for pickup at 86 Pondfield Road."
+            "We’ll confirm when your order is ready for pickup at 86 Pondfield Rd."
         )
+        settings.phone = "+19147793552"
+        settings.phone_is_placeholder = False
+        settings.email = "bronxvillenatural@gmail.com"
+        settings.address_line1 = "86 Pondfield Rd"
         settings.delivery_note = (
             "Local delivery is available in nearby ZIP codes. The store confirms fees and timing."
         )
@@ -198,7 +202,19 @@ def export_snapshot(db) -> None:
     brand_ids = {p.brand_id for p in products}
     cat_ids = {p.category_id for p in products}
     brands = [
-        {"id": b.id, "name": b.name, "slug": b.slug, "description": b.description, "is_featured": b.is_featured}
+        {
+            "id": b.id,
+            "name": b.name,
+            "slug": b.slug,
+            "description": b.description,
+            "is_featured": b.is_featured,
+            "logo_url": getattr(b, "logo_url", None),
+            "logo_alt": getattr(b, "logo_alt", None) or b.name,
+            "official_website_url": getattr(b, "official_website_url", None),
+            "logo_use_status": getattr(b, "logo_use_status", None) or "permission_pending",
+            "logo_background": getattr(b, "logo_background", None) or "cream",
+            "display_order": getattr(b, "display_order", 0) or 0,
+        }
         for b in db.execute(select(Brand).where(Brand.id.in_(brand_ids)).order_by(Brand.name)).scalars()
     ]
     categories = [
@@ -257,7 +273,7 @@ def export_snapshot(db) -> None:
             "phone": settings.phone if settings else None,
             "phone_is_placeholder": True if not settings else settings.phone_is_placeholder,
             "email": settings.email if settings else None,
-            "address_line1": settings.address_line1 if settings else "86 Pondfield Road",
+            "address_line1": settings.address_line1 if settings else "86 Pondfield Rd",
             "city": settings.city if settings else "Bronxville",
             "state": settings.state if settings else "NY",
             "zip": settings.zip if settings else "10708",

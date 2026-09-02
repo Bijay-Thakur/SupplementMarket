@@ -23,7 +23,9 @@ const publicSchema = z.object({
     .optional()
     .default("http://localhost:3000"),
   NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED: booleanFromEnv,
+  NEXT_PUBLIC_MOCK_AUTH_ENABLED: booleanFromEnv,
   NEXT_PUBLIC_DEMO_ROLE_SELECTOR_ENABLED: booleanFromEnv,
+  NEXT_PUBLIC_STRIPE_ENABLED: booleanFromEnv,
   NEXT_PUBLIC_API_URL: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional().or(z.literal("")),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
@@ -34,8 +36,11 @@ const parsed = publicSchema.safeParse({
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED:
     process.env.NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED,
+  NEXT_PUBLIC_MOCK_AUTH_ENABLED:
+    process.env.NEXT_PUBLIC_MOCK_AUTH_ENABLED ?? "true",
   NEXT_PUBLIC_DEMO_ROLE_SELECTOR_ENABLED:
     process.env.NEXT_PUBLIC_DEMO_ROLE_SELECTOR_ENABLED ?? "true",
+  NEXT_PUBLIC_STRIPE_ENABLED: process.env.NEXT_PUBLIC_STRIPE_ENABLED,
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -56,7 +61,9 @@ const data = parsed.data;
 export const publicEnv = {
   siteUrl: data.NEXT_PUBLIC_SITE_URL,
   customerAuthEnabled: data.NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED,
+  mockAuthEnabled: data.NEXT_PUBLIC_MOCK_AUTH_ENABLED,
   demoRoleSelectorEnabled: data.NEXT_PUBLIC_DEMO_ROLE_SELECTOR_ENABLED,
+  stripeEnabled: data.NEXT_PUBLIC_STRIPE_ENABLED,
   /**
    * FastAPI origin. Empty string means same-origin via Next.js rewrites
    * (`/api/v1`, `/media`) which is the local-demo default.

@@ -7,6 +7,7 @@ import { MobileNav } from "./mobile-nav";
 import { HeaderSearch } from "./header-search";
 import { PhoneCta } from "./phone-cta";
 import { CartLink } from "./cart-link";
+import { AccountLink } from "./account-link";
 
 /** Responsive storefront header. Server component; interactive bits are islands. */
 export function SiteHeader() {
@@ -39,6 +40,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-1 md:ml-2">
           <PhoneCta className="mr-2 hidden xl:inline-flex" />
           <CartLink />
+          <AccountLink />
           <MobileNav />
         </div>
       </Container>

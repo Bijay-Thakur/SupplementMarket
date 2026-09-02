@@ -34,16 +34,24 @@ export function RoleChooser() {
           Welcome to Bronxville Natural Market
         </h1>
         <p className="mt-3 text-sm text-[color:var(--muted)]">
-          This is a local demonstration. Choosing a role only changes which
-          screens you see — it is not a login and is not secure.
+          This is a local demonstration. Choosing a role starts a{" "}
+          <strong>demo authentication session</strong> (signed cookie). It is
+          not a real account and is not secure for production.
         </p>
         <div className="mt-6 flex flex-col gap-3">
           <button
             type="button"
             className="h-12 rounded-[--radius] bg-[color:var(--brand-magenta)] text-sm font-semibold text-white hover:bg-[color:var(--brand-magenta-strong)]"
-            onClick={() => {
+            onClick={async () => {
+              await fetch("/api/auth?action=demo-continue", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: "customer" }),
+              });
               setRole("customer");
               router.push("/");
+              router.refresh();
             }}
           >
             Continue as Customer
@@ -51,9 +59,16 @@ export function RoleChooser() {
           <button
             type="button"
             className="h-12 rounded-[--radius] bg-[color:var(--brand-green)] text-sm font-semibold text-white hover:bg-[color:var(--brand-green-strong)]"
-            onClick={() => {
+            onClick={async () => {
+              await fetch("/api/auth?action=demo-continue", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: "admin" }),
+              });
               setRole("admin");
               router.push("/admin");
+              router.refresh();
             }}
           >
             Continue as Admin

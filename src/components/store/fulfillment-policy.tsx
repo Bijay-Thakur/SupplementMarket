@@ -10,7 +10,7 @@ export function FulfillmentPolicy() {
   return (
     <PolicyShell title="Store Pickup & Local Delivery">
       <p>
-        Order online, then pick up at Bronxville Natural Market, 86 Pondfield Road,
+        Order online, then pick up at Bronxville Natural Market, 86 Pondfield Rd,
         or request local delivery. The store confirms timing, fees, and ZIP
         eligibility.
       </p>

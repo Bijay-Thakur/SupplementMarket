@@ -1,11 +1,14 @@
 # Bronxville Natural Market
 
 Demonstration ecommerce site for **Bronxville Natural Market**  
-86 Pondfield Road, Bronxville, NY 10708
+86 Pondfield Rd, Bronxville, NY 10708
 
 Customer storefront for vitamins and supplements, plus a demo admin portal. Shoppers can browse the catalog, search, filter, add to cart, and submit a **pickup or local-delivery order request**. Card payment is not enabled yet.
 
-This is a **client demo**, not live inventory. Product photos come from official manufacturer pages and are labeled for demo review. Prices are demonstration pricing, not shelf prices. The store phone number is not shown until the owner supplies a verified number.
+This is a **client demo**, not live inventory. Product photos come from official manufacturer pages and are labeled for demo review. Prices are demonstration pricing, not shelf prices.
+
+**Store:** 86 Pondfield Rd, Bronxville, NY 10708 · +1 (914) 779-3552 · bronxvillenatural@gmail.com  
+**Hours:** Monday–Saturday 9 AM–7 PM · Sunday 10 AM–6 PM
 
 ## Live demo (Vercel)
 
@@ -24,7 +27,9 @@ After the first deploy, optionally set `NEXT_PUBLIC_SITE_URL` to the Vercel doma
 | Catalog | `/products` |
 | Admin | `/admin` |
 
-The first visit shows a Customer / Admin role chooser. **It is not authentication.** Anyone with the URL can open `/admin`. Do not put real customer data in this demo.
+The first visit shows a Customer / Admin role chooser. That starts a **demo authentication session** (signed HttpOnly cookie). It is not a real account. Admin APIs reject requests without that cookie.
+
+Card payment is implemented behind `PAYMENT_PROVIDER=disabled`. Do not enter card numbers.
 
 ## What’s in the catalog
 
@@ -67,7 +72,7 @@ From `/admin` you can:
 - Edit announcement, hours note, pickup, and delivery copy
 - Preview a CSV import
 
-Store settings will not invent a phone number. If the owner has not provided one, the UI says the phone is not configured.
+Store settings include the owner-verified phone, email, address, and hours. Catalog prices remain demonstration pricing.
 
 Live manufacturer re-collection (`npm run catalog:collect`) needs the optional Python backend. The hosted demo already includes the imported official catalog.
 
@@ -76,7 +81,7 @@ Live manufacturer re-collection (`npm run catalog:collect`) needs the optional P
 - **App:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4
 - **Hosted demo API:** Next.js Route Handlers + bundled `src/data/catalog.json` (works on Vercel)
 - **Optional collector:** FastAPI + SQLite, for robots-respecting manufacturer catalog imports
-- **Later launch:** Supabase (auth/database) and Stripe (payments) are scaffolded but unused in this demo
+- **Later launch:** set `AUTH_PROVIDER=supabase`, `DATA_PROVIDER=supabase`, and `PAYMENT_PROVIDER=stripe_test` or `stripe_live` after applying `supabase/migrations` and filling credentials. See `.env.example` and `docs/phase-3-auth-data-plan.md`.
 
 ## Scripts
 

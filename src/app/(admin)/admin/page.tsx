@@ -15,6 +15,7 @@ export default function AdminDashboardPage() {
       <p className="mt-2 text-sm text-[color:var(--muted)]">
         Demonstration catalog. Official manufacturer products are labeled Demo
         until the store verifies shelf inventory and pricing.
+        {d?.persistence_notice ? ` ${d.persistence_notice}` : ""}
       </p>
       {q.isError && <p className="mt-4 text-[color:var(--danger)]">Could not load stats. Please refresh.</p>}
       {d && (

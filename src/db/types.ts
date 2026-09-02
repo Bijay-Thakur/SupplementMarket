@@ -1,15 +1,24 @@
 /**
- * Supabase database types.
- *
- * PLACEHOLDER — this file is regenerated from committed migrations in Phase 2
- * via `supabase gen types typescript` (see docs/supabase-setup.md). Until then
- * it exports a permissive shape so the typed clients compile.
+ * Regenerated placeholder until `supabase gen types` is run against the
+ * committed migrations in supabase/migrations/. Loose rows keep the
+ * server client compiling before that command is available.
  */
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
 export type Database = {
   public: {
-    Tables: Record<string, never>;
+    Tables: {
+      [table: string]: {
+        Row: Record<string, Json | undefined>;
+        Insert: Record<string, Json | undefined>;
+        Update: Record<string, Json | undefined>;
+        Relationships: [];
+      };
+    };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      is_admin: { Args: Record<string, never>; Returns: boolean };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

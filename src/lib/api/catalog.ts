@@ -48,7 +48,7 @@ export function relatedProducts(slug: string) {
 }
 
 export function productSuggestions(q: string) {
-  return apiFetch<{ items: { name: string; slug: string; brand_name: string }[] }>(
+  return apiFetch<{ items: { type?: string; name: string; slug?: string; href?: string; brand_name?: string }[] }>(
     `/api/v1/products/suggestions${toQuery({ q })}`,
   );
 }
@@ -135,6 +135,8 @@ export function adminDashboard() {
     new_products: number;
     total_orders: number;
     recent_orders: AdminOrderRow[];
+    persistence?: "session" | "database";
+    persistence_notice?: string;
   }>("/api/v1/admin/dashboard");
 }
 
@@ -171,6 +173,40 @@ export function createBrand(body: unknown) {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function adminUpdateBrand(id: number, body: unknown) {
+  return apiFetch<Brand>(`/api/v1/admin/brands/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAccountProfile() {
+  return apiFetch<{ user: unknown; addresses: unknown[] }>("/api/v1/account/profile");
+}
+
+export function patchAccountProfile(body: unknown) {
+  return apiFetch<{ user: unknown }>("/api/v1/account/profile", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listAccountAddresses() {
+  return apiFetch<unknown[]>("/api/v1/account/addresses");
+}
+
+export function createAccountAddress(body: unknown) {
+  return apiFetch("/api/v1/account/addresses", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deleteAccountAddress(id: string) {
+  return apiFetch(`/api/v1/account/addresses/${id}`, { method: "DELETE" });
+}
+
+export function listAccountOrders() {
+  return apiFetch<{ items: OrderPublic[] }>("/api/v1/account/orders");
 }
 
 export function createCategory(body: unknown) {

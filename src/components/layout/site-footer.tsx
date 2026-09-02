@@ -20,6 +20,14 @@ export function SiteFooter() {
           <div className="mt-3">
             <PhoneCta />
           </div>
+          {store.contact.email && (
+            <a
+              href={`mailto:${store.contact.email}`}
+              className="mt-2 inline-block text-sm text-[color:var(--brand-green-strong)] hover:text-[color:var(--brand-magenta)]"
+            >
+              {store.contact.email}
+            </a>
+          )}
         </div>
 
         {FOOTER_NAV.map((group) => (

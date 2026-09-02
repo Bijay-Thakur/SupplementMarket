@@ -45,10 +45,14 @@ test.describe("Phase 2 local demo flow", () => {
   });
 
   test("admin catalog import review table loads", async ({ page }) => {
-    await page.goto("/admin/catalog-imports");
+    await page.goto("/");
     const chooser = page.getByRole("dialog", { name: /Welcome to Bronxville Natural Market/i });
     if (await chooser.isVisible()) {
       await page.getByRole("button", { name: "Continue as Admin" }).click();
+    }
+    await page.goto("/admin/catalog-imports");
+    if (page.url().includes("/admin/login")) {
+      await page.getByRole("button", { name: /demo administrator/i }).click();
     }
     await expect(page.getByRole("heading", { name: /Brand catalog imports/i })).toBeVisible({ timeout: 15_000 });
     await page.goto("/admin/catalog-imports/sources");

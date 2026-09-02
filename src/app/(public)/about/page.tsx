@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui/container";
-import { DEFAULT_STORE_CONFIG, formatAddress } from "@/lib/config/store";
+import { DEFAULT_STORE_CONFIG, formatAddress, formatHours } from "@/lib/config/store";
 
 export const metadata: Metadata = { title: "About" };
 
@@ -25,6 +25,23 @@ export default function AboutPage() {
         <p className="mt-4 text-[color:var(--muted)]">
           Visit us at {formatAddress(store.address)}.
         </p>
+        {store.contact.phoneDisplay && (
+          <p className="mt-4 text-[color:var(--muted)]">
+            Phone:{" "}
+            <a className="text-[color:var(--brand-green-strong)] hover:underline" href={`tel:${store.contact.phone}`}>
+              {store.contact.phoneDisplay}
+            </a>
+          </p>
+        )}
+        {store.contact.email && (
+          <p className="mt-2 text-[color:var(--muted)]">
+            Email:{" "}
+            <a className="text-[color:var(--brand-green-strong)] hover:underline" href={`mailto:${store.contact.email}`}>
+              {store.contact.email}
+            </a>
+          </p>
+        )}
+        <p className="mt-4 text-[color:var(--muted)]">{formatHours(store.hours)}</p>
       </div>
     </Container>
   );

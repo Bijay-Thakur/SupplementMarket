@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 import { features } from "@/lib/config/features";
 import { publicEnv } from "@/lib/env/public";
+import { safeNextPath } from "@/lib/auth/types";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-/**
- * OAuth callback. The full Supabase code-exchange lands in Phase 6. While
- * customer auth is disabled this simply redirects home so the route is never a
- * dead end.
- */
 export async function GET(request: Request) {
-  const home = new URL("/", publicEnv.siteUrl);
+  const url = new URL(request.url);
+  const next = safeNextPath(url.searchParams.get("next"));
+  const dest = new URL(next, publicEnv.siteUrl);
   if (!features.customerAuth) {
-    return NextResponse.redirect(home);
+    return NextResponse.redirect(new URL("/", publicEnv.siteUrl));
   }
-  // Phase 6: exchange `code` for a session via Supabase, then redirect.
-  const { searchParams } = new URL(request.url);
-  const next = searchParams.get("next") ?? "/account";
-  return NextResponse.redirect(new URL(next, publicEnv.siteUrl));
+  const code = url.searchParams.get("code");
+  const supabase = await getSupabaseServerClient();
+  if (!code || !supabase) {
+    return NextResponse.redirect(new URL("/auth/sign-in?error=callback", publicEnv.siteUrl));
+  }
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    return NextResponse.redirect(new URL("/auth/sign-in?error=callback", publicEnv.siteUrl));
+  }
+  return NextResponse.redirect(dest);
 }

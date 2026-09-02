@@ -84,7 +84,7 @@ def update_brand(brand_id: int, payload: BrandUpdate, db: Session = Depends(get_
     if "name" in data and data["name"]:
         brand.name = data["name"]
         brand.slug = _unique_slug(db, Brand, slugify(data["name"]), exclude_id=brand_id)
-    for f in ("description", "logo_url", "is_featured"):
+    for f in ("description", "logo_url", "logo_alt", "official_website_url", "logo_use_status", "is_featured", "display_order"):
         if f in data:
             setattr(brand, f, data[f])
     db.commit()

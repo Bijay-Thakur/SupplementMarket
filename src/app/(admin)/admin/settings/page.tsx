@@ -30,12 +30,12 @@ export default function AdminSettingsPage() {
     >
       <h1 className="font-display text-3xl font-semibold">Store settings</h1>
       <p className="text-sm text-[color:var(--muted)]">
-        Phone stays a placeholder until the owner supplies a verified number. Do not invent one.
+        Phone, email, address, and hours are owner-verified. Catalog prices remain demonstration pricing.
       </p>
       <p className="text-sm">
         Address: {s.address_line1}, {s.city}, {s.state} {s.zip}
       </p>
-      <p className="text-sm">Phone: {s.phone_is_placeholder ? "Not configured (placeholder)" : s.phone}</p>
+      <p className="text-sm">Phone: {s.phone_is_placeholder ? "Not configured" : s.phone}</p>
       <label className="block text-sm">
         Email
         <input name="email" className="fld" defaultValue={s.email ?? ""} />

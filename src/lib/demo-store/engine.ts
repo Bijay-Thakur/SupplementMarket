@@ -13,10 +13,11 @@ import type {
   ProductListItem,
   ProductQuery,
   StoreSettings,
+  SuggestionItem,
   Tag,
 } from "@/lib/api/types";
 import { discountPercent, effectivePriceCents } from "@/lib/money";
-import { expandTerms } from "./search";
+import { documentFromProduct, searchDocuments } from "@/lib/search/catalog-search";
 
 const DIETARY_KEYS = [
   "vegan",
@@ -57,9 +58,22 @@ type CatalogSnapshot = {
   settings: StoreSettings;
 };
 
+export type AuditLog = {
+  id: number;
+  actor_user_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  summary: string;
+  request_id: string | null;
+  created_at: string;
+};
+
 type Store = CatalogSnapshot & {
   orders: AdminOrderDetail[];
   idempotency: Map<string, number>;
+  auditLogs: AuditLog[];
+  persistence: "session";
 };
 
 export class ApiHttpError extends Error {
@@ -85,10 +99,13 @@ function getStore(): Store {
     const snap = cloneSnapshot();
     g.__bnmDemo = {
       ...snap,
+      brands: (snap.brands ?? []).map(normalizeBrand),
       promotions: snap.promotions ?? [],
       catalog_sources: snap.catalog_sources ?? [],
       orders: [],
       idempotency: new Map(),
+      auditLogs: [],
+      persistence: "session",
     };
   }
   return g.__bnmDemo;
@@ -197,30 +214,16 @@ function pageOf<T>(items: T[], page: number, pageSize: number): Page<T> {
   return { items: items.slice(start, start + size), total, page: p, page_size: size, pages };
 }
 
-function haystack(p: DemoProduct): string {
-  return [
-    p.name,
-    p.short_description,
-    p.long_description,
-    p.ingredient_highlights,
-    p.form,
-    p.sku,
-    p.brand_name,
-    p.category_name,
-    ...(p.search_aliases ?? []),
-    ...(p.wellness_tags ?? []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function matchesQuery(p: DemoProduct, q?: string): boolean {
-  if (!q) return true;
-  const terms = expandTerms(q);
-  if (!terms.length) return true;
-  const hay = haystack(p);
-  return terms.some((t) => hay.includes(t));
+function normalizeBrand(b: Brand): Brand {
+  return {
+    ...b,
+    logo_url: b.logo_url ?? null,
+    logo_alt: b.logo_alt ?? b.name,
+    official_website_url: b.official_website_url ?? null,
+    logo_use_status: b.logo_use_status ?? "permission_pending",
+    logo_background: b.logo_background ?? "cream",
+    display_order: b.display_order ?? 0,
+  };
 }
 
 function activeOnly(p: DemoProduct) {
@@ -230,9 +233,6 @@ function activeOnly(p: DemoProduct) {
 function applyFilters(products: DemoProduct[], pq: ProductQuery & { includeInactive?: boolean }): DemoProduct[] {
   return products.filter((p) => {
     if (!pq.includeInactive && !activeOnly(p)) return false;
-    if (pq.includeInactive && p.is_archived && pq.availability !== "archived") {
-      /* still list archived in admin unless we want them hidden — FastAPI includes archived when include_inactive */
-    }
     if (pq.brand && p.brand_slug !== pq.brand) return false;
     if (pq.category && p.category_slug !== pq.category) return false;
     if (pq.form && p.form !== pq.form) return false;
@@ -246,7 +246,6 @@ function applyFilters(products: DemoProduct[], pq: ProductQuery & { includeInact
     for (const key of pq.dietary ?? []) {
       if ((DIETARY_KEYS as readonly string[]).includes(key) && !p.dietary[key as DietaryKey]) return false;
     }
-    if (!matchesQuery(p, pq.q)) return false;
     return true;
   });
 }
@@ -276,7 +275,18 @@ function sortProducts(items: DemoProduct[], sort = "relevance"): DemoProduct[] {
 }
 
 export function listProducts(pq: ProductQuery, includeInactive = false) {
-  const filtered = applyFilters(getStore().products, { ...pq, includeInactive });
+  let filtered = applyFilters(getStore().products, { ...pq, includeInactive });
+  if (pq.q?.trim()) {
+    const docs = filtered.map((p) => documentFromProduct(p));
+    const hits = searchDocuments(docs, pq.q);
+    const byId = new Map(filtered.map((p) => [p.id, p]));
+    filtered = hits.map((h) => byId.get(h.id)).filter((p): p is DemoProduct => Boolean(p));
+    if (!pq.sort || pq.sort === "relevance") {
+      const page = pageOf(filtered, pq.page ?? 1, pq.page_size ?? 24);
+      if (includeInactive) return { ...page, items: page.items.map(toAdminRow) };
+      return { ...page, items: page.items.map(toListItem) };
+    }
+  }
   const sorted = sortProducts(filtered, pq.sort);
   const page = pageOf(sorted, pq.page ?? 1, pq.page_size ?? 24);
   if (includeInactive) {
@@ -316,18 +326,33 @@ export function relatedFor(slug: string) {
   return { items: scored, total: scored.length, page: 1, page_size: scored.length || 8, pages: 1 };
 }
 
-export function suggestions(q: string) {
+export function suggestions(q: string): { items: SuggestionItem[] } {
   const query = (q || "").trim();
   if (query.length < 2) return { items: [] };
-  const { items } = listProducts({ q: query, sort: "relevance", page: 1, page_size: 8 }) as Page<ProductListItem>;
-  return {
-    items: items.map((p) => ({
+  const store = getStore();
+  const items: SuggestionItem[] = [];
+  const qn = query.toLowerCase();
+  for (const b of store.brands) {
+    if (b.name.toLowerCase().includes(qn) || (b.slug && b.slug.includes(qn))) {
+      items.push({ type: "brand", name: b.name, slug: b.slug, href: `/brands/${b.slug}` });
+    }
+  }
+  for (const c of store.categories) {
+    if (c.name.toLowerCase().includes(qn) || c.slug.includes(qn)) {
+      items.push({ type: "category", name: c.name, slug: c.slug, href: `/categories/${c.slug}` });
+    }
+  }
+  const { items: products } = listProducts({ q: query, sort: "relevance", page: 1, page_size: 6 }) as Page<ProductListItem>;
+  for (const p of products) {
+    items.push({
+      type: "product",
       name: p.name,
       slug: p.slug,
+      href: `/products/${p.slug}`,
       brand_name: p.brand_name,
-      match_reason: "Matches catalog search",
-    })),
-  };
+    });
+  }
+  return { items: items.slice(0, 12) };
 }
 
 export function filters(): FilterOptions {
@@ -408,7 +433,15 @@ export function patchSettings(body: Record<string, unknown>) {
   return s;
 }
 
-export function createBrand(body: { name: string; description?: string | null; is_featured?: boolean }) {
+export function createBrand(body: {
+  name: string;
+  description?: string | null;
+  is_featured?: boolean;
+  logo_url?: string | null;
+  logo_alt?: string | null;
+  official_website_url?: string | null;
+  logo_use_status?: string | null;
+}) {
   const store = getStore();
   const base = slugify(body.name);
   let slug = base;
@@ -417,15 +450,34 @@ export function createBrand(body: { name: string; description?: string | null; i
     slug = `${base}-${n}`;
     n += 1;
   }
-  const brand: Brand = {
+  const brand = normalizeBrand({
     id: nextId(store.brands),
     name: body.name,
     slug,
     description: body.description ?? null,
     is_featured: Boolean(body.is_featured),
-  };
+    logo_url: body.logo_url ?? null,
+    logo_alt: body.logo_alt ?? body.name,
+    official_website_url: body.official_website_url ?? null,
+    logo_use_status: body.logo_use_status ?? "permission_pending",
+    display_order: store.brands.length,
+  });
   store.brands.push(brand);
   return brand;
+}
+
+export function updateBrand(id: number, body: Record<string, unknown>) {
+  const brand = getStore().brands.find((b) => b.id === id);
+  if (!brand) throw new ApiHttpError(404, "Brand not found.", "not_found");
+  if (typeof body.name === "string") brand.name = body.name;
+  if ("description" in body) brand.description = (body.description as string) ?? null;
+  if (typeof body.is_featured === "boolean") brand.is_featured = body.is_featured;
+  if ("logo_url" in body) brand.logo_url = (body.logo_url as string) || null;
+  if ("logo_alt" in body) brand.logo_alt = (body.logo_alt as string) || brand.name;
+  if ("official_website_url" in body) brand.official_website_url = (body.official_website_url as string) || null;
+  if ("logo_use_status" in body) brand.logo_use_status = String(body.logo_use_status ?? "permission_pending");
+  if (typeof body.display_order === "number") brand.display_order = body.display_order;
+  return normalizeBrand(brand);
 }
 
 export function createCategory(body: { name: string; description?: string | null }) {
@@ -633,6 +685,9 @@ export function dashboard() {
     new_products: products.filter((p) => p.is_new).length,
     total_orders: orders.length,
     recent_orders: orders.slice(0, 5).map(toAdminOrderRow),
+    persistence: "session" as const,
+    persistence_notice:
+      "Admin changes and orders exist only for this server session. They are not saved across deploys or cold starts.",
   };
 }
 
@@ -662,6 +717,10 @@ function toPublicOrder(o: AdminOrderDetail): OrderPublic {
     total_cents: o.total_cents,
     items: o.items,
     created_at: o.created_at,
+    payment_method: o.payment_method ?? "pay_at_pickup",
+    payment_status: o.payment_status ?? "unpaid",
+    currency: o.currency ?? "USD",
+    persistence: "session",
   };
 }
 
@@ -673,6 +732,20 @@ export function createOrder(body: Record<string, unknown>) {
     if (existing) return toPublicOrder(existing);
   }
   const fulfillment = body.fulfillment_type === "delivery" ? "delivery" : "pickup";
+  const phone = String(body.customer_phone ?? "").trim();
+  if (!phone) {
+    throw new ApiHttpError(400, "Phone is required for pickup and delivery.", "validation", {
+      customer_phone: "Phone is required.",
+    });
+  }
+  const paymentMethod = body.payment_method === "card" ? "card" : "pay_at_pickup";
+  if (paymentMethod === "card") {
+    throw new ApiHttpError(
+      400,
+      "Online card payment is not available in this demo. Choose pay at pickup or submit an order request.",
+      "payment_disabled",
+    );
+  }
   if (fulfillment === "delivery") {
     const missing: Record<string, string> = {};
     if (!body.delivery_address_line1) missing.delivery_address_line1 = "Required for delivery.";
@@ -716,12 +789,19 @@ export function createOrder(body: Record<string, unknown>) {
     fulfillment_type: fulfillment,
     customer_name: String(body.customer_name ?? ""),
     customer_email: String(body.customer_email ?? ""),
-    customer_phone: String(body.customer_phone ?? ""),
+    customer_phone: phone,
     delivery_address_line1: (body.delivery_address_line1 as string) ?? null,
+    delivery_address_line2: (body.delivery_address_line2 as string) ?? null,
     delivery_city: (body.delivery_city as string) ?? null,
     delivery_state: (body.delivery_state as string) ?? null,
     delivery_zip: (body.delivery_zip as string) ?? null,
     delivery_instructions: (body.delivery_instructions as string) ?? null,
+    payment_method: "pay_at_pickup",
+    payment_status: "unpaid",
+    currency: "USD",
+    user_id: typeof body.user_id === "string" ? body.user_id : null,
+    stripe_checkout_session_id: null,
+    stripe_payment_intent_id: null,
     subtotal_cents: subtotal,
     delivery_fee_cents: null,
     total_cents: subtotal,
@@ -730,6 +810,9 @@ export function createOrder(body: Record<string, unknown>) {
     item_count: items.reduce((n, i) => n + i.quantity, 0),
     items,
     created_at: now,
+    placed_at: now,
+    paid_at: null,
+    cancelled_at: null,
   };
   store.orders.unshift(order);
   if (key) store.idempotency.set(key, order.id);
@@ -740,6 +823,21 @@ export function getOrderByToken(token: string) {
   const o = getStore().orders.find((x) => x.public_token === token);
   if (!o) throw new ApiHttpError(404, "Order not found.", "not_found");
   return toPublicOrder(o);
+}
+
+export function listOrdersForUser(userId: string) {
+  return getStore()
+    .orders.filter((o) => o.user_id === userId)
+    .map(toPublicOrder);
+}
+
+export function recordAudit(entry: Omit<AuditLog, "id" | "created_at">) {
+  const store = getStore();
+  store.auditLogs.unshift({
+    ...entry,
+    id: nextId(store.auditLogs),
+    created_at: new Date().toISOString(),
+  });
 }
 
 export function listOrders(params: { q?: string; status?: string; page?: number }) {

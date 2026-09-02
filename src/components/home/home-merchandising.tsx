@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listBrands, listProducts } from "@/lib/api/catalog";
 import { ProductGrid, ProductGridSkeleton } from "@/components/catalog/product-grid";
 import { Container } from "@/components/ui/container";
+import { BrandCard } from "@/components/catalog/brand-card";
 
 function Section({
   title,
@@ -76,13 +77,7 @@ export function HomeMerchandising() {
       <Section title="Shop by brand" href="/brands">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(brands.data ?? []).slice(0, 8).map((b) => (
-            <Link
-              key={b.id}
-              href={`/brands/${b.slug}`}
-              className="rounded-[--radius] border border-[color:var(--border)] bg-surface px-4 py-5 text-center font-medium hover:border-[color:var(--brand-green)]"
-            >
-              {b.name}
-            </Link>
+            <BrandCard key={b.id} brand={b} className="h-36" />
           ))}
         </div>
       </Section>

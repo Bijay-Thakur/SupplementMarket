@@ -26,6 +26,12 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_rsa.pub
 
 # debug
 npm-debug.log*
@@ -33,9 +39,22 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env and secrets — NEVER commit real keys, tokens, or filled env files.
+# Only committed templates are `.env.example` (and backend/.env.example).
+.env
+.env.*
 !.env.example
+!**/.env.example
+backend/.env
+.envrc
+.secrets/
+secrets/
+credentials.json
+*-credentials.json
+service-account*.json
+google-services.json
+**/serviceAccount*.json
+.supabase/.temp/
 
 # vercel
 .vercel
