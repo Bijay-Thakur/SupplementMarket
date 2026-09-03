@@ -5,8 +5,10 @@
 import sharp from "sharp";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const brandDir = path.join(process.cwd(), "public", "brand");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const brandDir = path.join(repoRoot, "frontend", "public", "brand");
 const source = path.join(brandDir, "bronxville-natural-market-logo-source.png");
 
 if (!existsSync(source)) {

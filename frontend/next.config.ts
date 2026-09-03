@@ -1,4 +1,11 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadEnvConfig } from "@next/env";
 import type { NextConfig } from "next";
+
+const frontendDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(frontendDir, "..");
+loadEnvConfig(repoRoot);
 
 /**
  * Baseline security headers. A full, tightened Content-Security-Policy
@@ -18,6 +25,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: repoRoot,
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

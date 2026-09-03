@@ -4,7 +4,14 @@
  * Does not log secrets. Skips products marked verified so admin edits survive.
  */
 import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+loadEnv({ path: resolve(repoRoot, ".env") });
+loadEnv({ path: resolve(repoRoot, ".env.local"), override: true });
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,7 +20,9 @@ if (!url || !key) {
   process.exit(1);
 }
 
-const catalog = JSON.parse(await readFile(new URL("../src/data/catalog.json", import.meta.url), "utf8"));
+const catalog = JSON.parse(
+  await readFile(resolve(repoRoot, "frontend/src/data/catalog.json"), "utf8"),
+);
 const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const report = { created: 0, updated: 0, skipped: 0, skipped_verified: 0, errors: [] };

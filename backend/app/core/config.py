@@ -2,13 +2,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# backend/app/core/config.py → repository root (one .env for the whole project)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=(_REPO_ROOT / ".env", _REPO_ROOT / ".env.local"),
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     # "development" | "production". Dev-only features (seed/reset, demo admin)

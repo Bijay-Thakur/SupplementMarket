@@ -32,4 +32,4 @@ markers = [
 
 [tool.setuptools.packages.find]
 include = ["app*"]
-exclude = ["alembic*", "tests*", "storage*", "backend*"]
+exclude = ["alembic*", "tests*", "storage*"]

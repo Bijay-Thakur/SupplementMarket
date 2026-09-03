@@ -1,7 +1,7 @@
 """CLI entry point for seeding/resetting demo data.
 
-Usage (from backend/ with venv active):
-    python -m app.seed.run
+Usage (from repository root):
+    npm run seed:demo
 """
 from __future__ import annotations
 

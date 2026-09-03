@@ -12,12 +12,13 @@ This is a **client demo**, not live inventory. Product photos come from official
 
 ## Live demo (Vercel)
 
-The app is a self-contained [Next.js](https://nextjs.org/) project. No Python, Stripe, or Supabase keys are required.
+The storefront is a self-contained [Next.js](https://nextjs.org/) app in `frontend/`. No Python, Stripe, or Supabase keys are required.
 
 1. Open [vercel.com/new](https://vercel.com/new)
 2. Import this GitHub repository: [Bijay-Thakur/SupplementMarket](https://github.com/Bijay-Thakur/SupplementMarket)
-3. Leave environment variables empty
-4. Click **Deploy**
+3. Set **Root Directory** to `frontend`
+4. Leave environment variables empty
+5. Click **Deploy**
 
 After the first deploy, optionally set `NEXT_PUBLIC_SITE_URL` to the Vercel domain (for example `https://your-app.vercel.app`).
 
@@ -41,6 +42,8 @@ Card payment is implemented behind `PAYMENT_PROVIDER=disabled`. Do not enter car
 Images remain **permission-pending**. They are for local/demo review until the store has written manufacturer permission or an authorized asset feed.
 
 ## Local development
+
+Copy `.env.example` to `.env` if you want to override defaults. One file at the repo root is used by both apps.
 
 ```powershell
 npm install
@@ -78,9 +81,9 @@ Live manufacturer re-collection (`npm run catalog:collect`) needs the optional P
 
 ## Stack
 
-- **App:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4
-- **Hosted demo API:** Next.js Route Handlers + bundled `src/data/catalog.json` (works on Vercel)
-- **Optional collector:** FastAPI + SQLite, for robots-respecting manufacturer catalog imports
+- **App:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 in `frontend/`
+- **Hosted demo API:** Next.js Route Handlers + bundled `frontend/src/data/catalog.json` (works on Vercel)
+- **Optional collector:** FastAPI + SQLite in `backend/`, for robots-respecting manufacturer catalog imports
 - **Later launch:** set `AUTH_PROVIDER=supabase`, `DATA_PROVIDER=supabase`, and `PAYMENT_PROVIDER=stripe_test` or `stripe_live` after applying `supabase/migrations` and filling credentials. See `.env.example` and `docs/phase-3-auth-data-plan.md`.
 
 ## Scripts
@@ -99,22 +102,25 @@ Live manufacturer re-collection (`npm run catalog:collect`) needs the optional P
 ## Project layout
 
 ```
-src/app/(public)/     Storefront routes
-src/app/(admin)/      Admin routes (no-index)
-src/app/api/v1/       Bundled demo API for Vercel
-src/components/       UI, catalog, cart, admin
-src/data/catalog.json Bundled official catalog
-public/brand/         Store logo (source of truth)
-public/media/         Optimized product photos
-backend/              Optional FastAPI collector
-docs/                 Implementation notes
+frontend/                  Next.js storefront + demo API
+  src/app/(public)/        Storefront routes
+  src/app/(admin)/         Admin routes (no-index)
+  src/app/api/v1/          Bundled demo API for Vercel
+  src/components/          UI, catalog, cart, admin
+  src/data/catalog.json    Bundled official catalog
+  public/brand/            Store logo (source of truth)
+  public/media/            Optimized product photos
+backend/                   Optional FastAPI collector
+.env.example               Single env template for both apps
+docs/                      Implementation notes
+supabase/                  Schema for a later persistent launch
 ```
 
 ## Brand
 
 The official logo is never redrawn. Source file:
 
-`public/brand/bronxville-natural-market-logo-source.png`
+`frontend/public/brand/bronxville-natural-market-logo-source.png`
 
 Web derivatives are generated with `npm run logo:optimize`.
 

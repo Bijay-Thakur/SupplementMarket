@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -17,8 +17,9 @@
 /playwright-report
 
 # next.js
-/.next/
+.next/
 /out/
+frontend/out/
 
 # production
 /build
@@ -40,12 +41,10 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env and secrets — NEVER commit real keys, tokens, or filled env files.
-# Only committed templates are `.env.example` (and backend/.env.example).
+# Only committed template is the repo-root `.env.example`.
 .env
 .env.*
 !.env.example
-!**/.env.example
-backend/.env
 .envrc
 .secrets/
 secrets/

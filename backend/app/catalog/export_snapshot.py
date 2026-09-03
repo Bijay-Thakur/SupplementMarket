@@ -21,8 +21,9 @@ from app.models import Product, ProductImage, StoreSettings
 from app.services import serialize
 
 ROOT = Path(__file__).resolve().parents[3]
-PUBLIC_MEDIA = ROOT / "public" / "media" / "products"
-SNAPSHOT = ROOT / "src" / "data" / "catalog.json"
+FRONTEND = ROOT / "frontend"
+PUBLIC_MEDIA = FRONTEND / "public" / "media" / "products"
+SNAPSHOT = FRONTEND / "src" / "data" / "catalog.json"
 
 
 def _clean_name(name: str) -> str:

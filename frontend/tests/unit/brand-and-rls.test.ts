@@ -5,7 +5,7 @@ import { BrandCard } from "@/components/catalog/brand-card";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const sql = readFileSync(
-  path.join(process.cwd(), "supabase/migrations/20260902120000_init_commerce.sql"),
+  path.join(process.cwd(), "../supabase/migrations/20260902120000_init_commerce.sql"),
   "utf8",
 );
 
