@@ -5,7 +5,28 @@ import type { NextConfig } from "next";
 
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendDir, "..");
-loadEnvConfig(repoRoot);
+// Next loads frontend/.env* before evaluating this config. Force the monorepo
+// root load so server-only values (notably SUPABASE_SERVICE_ROLE_KEY) are also
+// available without duplicating secrets into frontend/.env.local.
+loadEnvConfig(repoRoot, process.env.NODE_ENV !== "production", console, true);
+
+function supabaseImagePatterns() {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) return [];
+  try {
+    const parsed = new URL(raw);
+    const protocol: "http" | "https" = parsed.protocol === "http:" ? "http" : "https";
+    return [
+      {
+        protocol,
+        hostname: parsed.hostname,
+        pathname: "/storage/v1/object/public/**",
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Baseline security headers. A full, tightened Content-Security-Policy
@@ -35,6 +56,7 @@ const nextConfig: NextConfig = {
         port: "8000",
         pathname: "/media/**",
       },
+      ...supabaseImagePatterns(),
     ],
   },
   async rewrites() {

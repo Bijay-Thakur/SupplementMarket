@@ -137,8 +137,8 @@ function uniqueSlug(base: string, excludeId?: number): string {
   return slug;
 }
 
-function nextId(items: { id: number }[]): number {
-  return items.reduce((m, i) => Math.max(m, i.id), 0) + 1;
+function nextId(items: { id: number | string }[]): number {
+  return items.reduce((m, i) => Math.max(m, typeof i.id === "number" ? i.id : 0), 0) + 1;
 }
 
 function refreshPricing(p: DemoProduct): DemoProduct {
@@ -258,7 +258,7 @@ function sortProducts(items: DemoProduct[], sort = "relevance"): DemoProduct[] {
   else if (sort === "name_asc") copy.sort(byName);
   else if (sort === "name_desc") copy.sort((a, b) => b.name.localeCompare(a.name));
   else if (sort === "newest")
-    copy.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")) || b.id - a.id);
+    copy.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")) || String(b.id).localeCompare(String(a.id)));
   else if (sort === "discount")
     copy.sort(
       (a, b) =>
@@ -679,15 +679,19 @@ export function dashboard() {
   const active = products.filter((p) => p.is_active);
   const orders = getStore().orders;
   return {
+    total_products: products.length,
     active_products: active.length,
+    draft_products: products.filter((p) => !p.is_active).length,
+    brand_count: getStore().brands.length,
+    category_count: getStore().categories.length,
     on_sale: products.filter((p) => p.on_sale).length,
+    missing_images: products.filter((p) => !p.primary_image_url).length,
+    recent_import_count: listCatalogImports().length,
     out_of_stock: products.filter((p) => p.availability === "out_of_stock").length,
     new_products: products.filter((p) => p.is_new).length,
     total_orders: orders.length,
     recent_orders: orders.slice(0, 5).map(toAdminOrderRow),
     persistence: "session" as const,
-    persistence_notice:
-      "Admin changes and orders exist only for this server session. They are not saved across deploys or cold starts.",
   };
 }
 
@@ -738,23 +742,24 @@ export function createOrder(body: Record<string, unknown>) {
       customer_phone: "Phone is required.",
     });
   }
+  if (!body.user_id) {
+    throw new ApiHttpError(401, "Sign in is required.", "unauthorized");
+  }
   const paymentMethod = body.payment_method === "card" ? "card" : "pay_at_pickup";
   if (paymentMethod === "card") {
     throw new ApiHttpError(
       400,
-      "Online card payment is not available in this demo. Choose pay at pickup or submit an order request.",
+      "Online card payment is not available yet. Choose pay at pickup or submit an order request.",
       "payment_disabled",
     );
   }
-  if (fulfillment === "delivery") {
-    const missing: Record<string, string> = {};
-    if (!body.delivery_address_line1) missing.delivery_address_line1 = "Required for delivery.";
-    if (!body.delivery_city) missing.delivery_city = "Required for delivery.";
-    if (!body.delivery_state) missing.delivery_state = "Required for delivery.";
-    if (!body.delivery_zip) missing.delivery_zip = "Required for delivery.";
-    if (Object.keys(missing).length) {
-      throw new ApiHttpError(400, "Delivery address is incomplete.", "validation", missing);
-    }
+  const missing: Record<string, string> = {};
+  if (!body.delivery_address_line1) missing.delivery_address_line1 = "Address is required.";
+  if (!body.delivery_city) missing.delivery_city = "City is required.";
+  if (!body.delivery_state) missing.delivery_state = "State is required.";
+  if (!body.delivery_zip) missing.delivery_zip = "ZIP is required.";
+  if (Object.keys(missing).length) {
+    throw new ApiHttpError(400, "Address and phone are required before placing an order.", "validation", missing);
   }
   const lines = Array.isArray(body.items) ? (body.items as { product_id: number; quantity: number }[]) : [];
   if (!lines.length) throw new ApiHttpError(400, "Cart is empty.", "validation");

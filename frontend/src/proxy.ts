@@ -1,15 +1,19 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
+import { updateSession } from "@/lib/supabase/proxy";
 
 /**
- * Next.js 16 request proxy. Authorization still happens in Route Handlers,
- * server actions, and data-access functions. This only forwards the pathname
- * and, when Supabase auth is configured, session refresh is handled in
- * Route Handlers via `@supabase/ssr` cookie clients.
+ * Next.js 16 request proxy. Refreshes the Supabase session with getClaims()
+ * and forwards the pathname. Page, API, and database authorization still run
+ * independently in layouts, route handlers, and FastAPI.
  */
 export async function proxy(request: NextRequest) {
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-pathname", request.nextUrl.pathname);
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  const { response } = await updateSession(request);
+  response.headers.set("x-pathname", request.nextUrl.pathname);
+  const path = request.nextUrl.pathname;
+  if (path.startsWith("/account") || path.startsWith("/admin") || path.startsWith("/api/admin") || path.startsWith("/auth/")) {
+    response.headers.set("Cache-Control", "private, no-store");
+  }
+  return response;
 }
 
 export const config = {

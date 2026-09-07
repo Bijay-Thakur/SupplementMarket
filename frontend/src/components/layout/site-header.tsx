@@ -5,12 +5,15 @@ import { PRIMARY_NAV } from "@/lib/config/navigation";
 import { Logo } from "./logo";
 import { MobileNav } from "./mobile-nav";
 import { HeaderSearch } from "./header-search";
-import { PhoneCta } from "./phone-cta";
 import { CartLink } from "./cart-link";
-import { AccountLink } from "./account-link";
+import { AuthNav } from "./auth-nav";
+import { getAuthenticatedUser } from "@/lib/auth/server";
+import { SwitchExperienceButton } from "@/components/entry/entry-experience";
 
 /** Responsive storefront header. Server component; interactive bits are islands. */
-export function SiteHeader() {
+export async function SiteHeader() {
+  const user = await getAuthenticatedUser();
+  const guest = !user;
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-surface/95 backdrop-blur">
       <Container className="flex h-16 items-center gap-4 lg:h-20">
@@ -38,10 +41,14 @@ export function SiteHeader() {
         </div>
 
         <div className="ml-auto flex items-center gap-1 md:ml-2">
-          <PhoneCta className="mr-2 hidden xl:inline-flex" />
           <CartLink />
-          <AccountLink />
-          <MobileNav />
+          <AuthNav />
+          {guest ? (
+            <div className="hidden lg:block">
+              <SwitchExperienceButton />
+            </div>
+          ) : null}
+          <MobileNav signedIn={Boolean(user)} email={user?.email ?? null} />
         </div>
       </Container>
 
@@ -54,7 +61,6 @@ export function SiteHeader() {
   );
 }
 
-/** Static, non-interactive placeholder shown while search params resolve. */
 function SearchFallback() {
   return (
     <div

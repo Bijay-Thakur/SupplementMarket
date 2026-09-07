@@ -30,7 +30,7 @@ export default function AdminSettingsPage() {
     >
       <h1 className="font-display text-3xl font-semibold">Store settings</h1>
       <p className="text-sm text-[color:var(--muted)]">
-        Phone, email, address, and hours are owner-verified. Catalog prices remain demonstration pricing.
+        Phone, email, address, and hours are owner-verified.
       </p>
       <p className="text-sm">
         Address: {s.address_line1}, {s.city}, {s.state} {s.zip}

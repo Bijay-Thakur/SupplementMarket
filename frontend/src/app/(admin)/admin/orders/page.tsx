@@ -15,7 +15,7 @@ export default function AdminOrdersPage() {
   return (
     <div>
       <h1 className="font-display text-3xl font-semibold">Orders</h1>
-      <p className="mt-1 text-sm text-[color:var(--muted)]">Demonstration order requests — not live payments.</p>
+      <p className="mt-1 text-sm text-[color:var(--muted)]">Order requests — card payment is not live yet.</p>
       <input
         className="fld mt-4 max-w-sm"
         placeholder="Search order # or name"

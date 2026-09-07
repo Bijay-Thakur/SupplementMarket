@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     )
 
     # "development" | "production". Dev-only features (seed/reset, demo admin)
-    # are hard-disabled when this is not "development".
-    environment: str = "development"
+    # are hard-disabled unless this is explicitly "development" — default is
+    # "production" so a misconfigured deploy (missing env var) fails closed.
+    environment: str = "production"
 
     api_v1_prefix: str = "/api/v1"
     app_name: str = "Bronxville Natural Market API (Demo)"
@@ -63,9 +64,34 @@ class Settings(BaseSettings):
     # Max request body size guard (bytes) for JSON endpoints.
     max_json_body_bytes: int = 1_000_000
 
+    app_env: str = "production"
+    supabase_url: str = ""
+    next_public_supabase_url: str = ""
+    next_public_supabase_publishable_key: str = ""
+    next_public_supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    admin_internal_secret: str = ""
+    fastapi_max_csv_bytes: int = 10_000_000
+
     @property
     def is_development(self) -> bool:
-        return self.environment.lower() == "development"
+        return self.environment.lower() == "development" and self.app_env.lower() == "development"
+
+    @property
+    def supabase_rest_url(self) -> str:
+        return (self.supabase_url or self.next_public_supabase_url).rstrip("/")
+
+    @property
+    def supabase_publishable_key(self) -> str:
+        return self.next_public_supabase_publishable_key or self.next_public_supabase_anon_key
+
+    @property
+    def supabase_configured(self) -> bool:
+        return bool(self.supabase_rest_url and self.supabase_service_role_key)
+
+    @property
+    def supabase_auth_configured(self) -> bool:
+        return bool(self.supabase_rest_url and self.supabase_publishable_key)
 
 
 @lru_cache

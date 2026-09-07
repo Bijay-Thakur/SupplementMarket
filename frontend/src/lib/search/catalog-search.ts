@@ -7,7 +7,7 @@
  */
 
 export type SearchDocument = {
-  id: number;
+  id: number | string;
   slug: string;
   name: string;
   brandName: string;
@@ -37,7 +37,7 @@ export type SearchFilters = {
 };
 
 export type RankedHit = {
-  id: number;
+  id: number | string;
   score: number;
   reasons: string[];
 };
@@ -367,12 +367,12 @@ export function searchDocuments(
     });
   }
 
-  hits.sort((a, b) => b.score - a.score || a.id - b.id);
+  hits.sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)));
   return hits;
 }
 
 export function documentFromProduct(p: {
-  id: number;
+  id: number | string;
   slug: string;
   name: string;
   brand_name: string;

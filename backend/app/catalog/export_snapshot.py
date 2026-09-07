@@ -150,10 +150,7 @@ def recover_images(db) -> None:
 def polish_catalog(db) -> None:
     settings = db.get(StoreSettings, 1)
     if settings:
-        settings.announcement = (
-            "Demonstration catalog for Bronxville Natural Market — 86 Pondfield Rd. "
-            "Prices shown are demo pricing, not the store’s shelf prices."
-        )
+        settings.announcement = None
         settings.hours_note = (
             "Monday–Saturday, 9 AM–7 PM. Sunday, 10 AM–6 PM."
         )

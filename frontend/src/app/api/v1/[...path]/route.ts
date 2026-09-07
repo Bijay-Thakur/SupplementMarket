@@ -14,18 +14,12 @@ import {
   createTag,
   dashboard,
   duplicateProduct,
-  filters,
   getAdminOrder,
-  getBrand,
   getCatalogImport,
-  getCategory,
   getOrderByToken,
   getProductById,
-  getProductBySlug,
   getSettings,
-  listBrands,
   listCatalogImports,
-  listCategories,
   listOrders,
   listOrdersForUser,
   listProducts,
@@ -35,22 +29,21 @@ import {
   patchSettings,
   previewCsv,
   recordAudit,
-  relatedFor,
   resetDemoStore,
-  suggestions,
   updateBrand,
   updateOrderStatus,
   updateProduct,
 } from "@/lib/demo-store/engine";
 import type { ProductQuery } from "@/lib/api/types";
 import { getUserFromRequest, requireAdmin, requireUser } from "@/lib/auth/server";
+import { catalogRepository, getDataProvider } from "@/lib/data/repository";
+import { dashboard as supabaseDashboard } from "@/lib/data/supabase-catalog";
+import { fastapiAdmin } from "@/lib/admin/fastapi-proxy";
+import { revalidatePath } from "next/cache";
 import {
   deleteAddress,
-  getMockProfile,
   listAddresses,
-  putMockProfile,
   saveAddress,
-  usernameTaken,
 } from "@/lib/auth/mock-store";
 import { randomUUID } from "node:crypto";
 
@@ -113,6 +106,13 @@ function join(path: string[]) {
   return path.join("/");
 }
 
+function revalidateStorefront() {
+  revalidatePath("/");
+  revalidatePath("/products");
+  revalidatePath("/sales");
+  revalidatePath("/admin/products");
+}
+
 async function audit(req: NextRequest, action: string, entityType: string, entityId: string | number | null, summary: string) {
   try {
     const user = await getUserFromRequest(req);
@@ -135,16 +135,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const sp = req.nextUrl.searchParams;
     const key = join(path);
 
-    if (key === "products") return json(listProducts(productQuery(sp)));
-    if (key === "products/suggestions") return json(suggestions(sp.get("q") ?? ""));
-    if (key === "products/filters") return json(filters());
-    if (path[0] === "products" && path.length === 2) return json(getProductBySlug(path[1]));
-    if (path[0] === "products" && path[2] === "related") return json(relatedFor(path[1]));
+    const repo = catalogRepository();
+    if (key === "products") return json(await Promise.resolve(repo.listProducts(productQuery(sp))));
+    if (key === "products/suggestions") return json(await Promise.resolve(repo.suggestions(sp.get("q") ?? "")));
+    if (key === "products/filters") return json(await Promise.resolve(repo.filters()));
+    if (path[0] === "products" && path.length === 2) return json(await Promise.resolve(repo.getProductBySlug(path[1])));
+    if (path[0] === "products" && path[2] === "related") return json(await Promise.resolve(repo.relatedFor(path[1])));
 
-    if (key === "brands") return json(listBrands());
-    if (path[0] === "brands" && path.length === 2) return json(getBrand(path[1]));
-    if (key === "categories") return json(listCategories());
-    if (path[0] === "categories" && path.length === 2) return json(getCategory(path[1]));
+    if (key === "brands") return json(await Promise.resolve(repo.listBrands()));
+    if (path[0] === "brands" && path.length === 2) return json(await Promise.resolve(repo.getBrand(path[1])));
+    if (key === "categories") return json(await Promise.resolve(repo.listCategories()));
+    if (path[0] === "categories" && path.length === 2) return json(await Promise.resolve(repo.getCategory(path[1])));
     if (key === "tags") return json(listTags());
     if (key === "store-settings") return json(getSettings());
     if (key === "promotions") return json(listPromotions().filter((p) => p.is_active));
@@ -153,8 +154,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     if (key === "account/profile") {
       const user = await requireUser(req);
-      const profile = getMockProfile(user.id) ?? user;
-      return json({ user: profile, addresses: listAddresses(user.id) });
+      return json({ user, addresses: listAddresses(user.id) });
     }
     if (key === "account/addresses") {
       const user = await requireUser(req);
@@ -168,7 +168,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (path[0] === "admin") {
       await requireAdmin(req);
     }
-    if (key === "admin/dashboard") return json(dashboard());
+    if (getDataProvider() === "supabase" && key === "admin/products") {
+      const qs = req.nextUrl.searchParams.toString();
+      return json(await fastapiAdmin(`/products${qs ? `?${qs}` : ""}`));
+    }
+    if (getDataProvider() === "supabase" && path[0] === "admin" && path[1] === "products" && path.length === 3) {
+      return json(await fastapiAdmin(`/products/${path[2]}`));
+    }
+    if (key === "admin/dashboard") {
+      if (getDataProvider() === "supabase") return json(await supabaseDashboard());
+      return json(dashboard());
+    }
     if (key === "admin/products") return json(listProducts(productQuery(sp), true));
     if (path[0] === "admin" && path[1] === "products" && path.length === 3 && path[2] !== "bulk-import") {
       return json(getProductById(Number(path[2])));
@@ -215,9 +225,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const key = join(path);
 
     if (key === "orders") {
-      const user = await getUserFromRequest(req);
+      const user = await requireUser(req);
       const body = await readJson(req);
-      if (user) body.user_id = user.id;
+      body.user_id = user.id;
       return json(createOrder(body), 201);
     }
     if (key === "account/addresses") {
@@ -244,12 +254,30 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return json(address, 201);
     }
     if (path[0] === "admin") await requireAdmin(req);
+    if (getDataProvider() === "supabase" && key === "admin/products") {
+      const created = await fastapiAdmin("/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(await readJson(req)),
+      });
+      revalidateStorefront();
+      return json(created, 201);
+    }
+    if (getDataProvider() === "supabase" && path[0] === "admin" && path[1] === "products" && path[3] === "image") {
+      const form = await req.formData();
+      const uploaded = await fastapiAdmin(`/products/${path[2]}/image`, { method: "POST", body: form });
+      revalidateStorefront();
+      return json(uploaded);
+    }
     if (key === "admin/products") {
       const created = createProduct(await readJson(req));
       await audit(req, "product.create", "product", created.id, `Created ${created.name}`);
       return json(created, 201);
     }
     if (path[0] === "admin" && path[1] === "products" && path[3] === "duplicate") {
+      if (getDataProvider() === "supabase") {
+        return json({ error: "not_supported", detail: "Duplicate is not available for live catalog rows." }, 400);
+      }
       return json(duplicateProduct(Number(path[2])), 201);
     }
     if (key === "admin/products/bulk-import/preview") {
@@ -283,7 +311,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       );
     }
     if (key === "admin/catalog-imports") return json(createCatalogImport(await readJson(req)), 201);
-    if (key === "dev/reset" || key === "dev/seed") return json(resetDemoStore());
+    if (key === "dev/reset" || key === "dev/seed") {
+      await requireAdmin(req);
+      return json(resetDemoStore());
+    }
     if (path[0] === "admin" && path[1] === "catalog-imports" && ["approve", "reject", "import", "recalculate"].includes(path[3] ?? "")) {
       return json({ ok: false, updated: 0, created: 0, skipped: 0, detail: "Live catalog import is not available on the hosted demo." });
     }
@@ -308,6 +339,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     if (path[0] === "admin" && path[1] === "products" && path.length === 3) {
       await requireAdmin(req);
+      if (getDataProvider() === "supabase") {
+        const updated = await fastapiAdmin(`/products/${path[2]}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        revalidateStorefront();
+        return json(updated);
+      }
       const updated = updateProduct(Number(path[2]), body);
       await audit(req, "product.update", "product", updated.id, `Updated ${updated.name}`);
       return json(updated);
@@ -326,21 +366,30 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     if (key === "account/profile") {
       const user = await requireUser(req);
-      const current = getMockProfile(user.id) ?? user;
-      if (typeof body.username === "string" && usernameTaken(body.username, user.id)) {
-        throw new ApiHttpError(400, "That username is not available.", "validation", { username: "Taken." });
+      const supabase = await (await import("@/lib/supabase/server")).getSupabaseServerClient();
+      if (!supabase) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+      const username = String(body.username ?? user.username);
+      const fullName = String(body.fullName ?? body.full_name ?? body.displayName ?? user.fullName);
+      const phone = typeof body.phone === "string" ? body.phone : user.phone;
+      const avatarUrl =
+        typeof body.avatarUrl === "string"
+          ? body.avatarUrl
+          : typeof body.avatar_url === "string"
+            ? body.avatar_url
+            : user.avatarUrl;
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          username,
+          full_name: fullName,
+          phone: phone || null,
+          avatar_url: avatarUrl || null,
+        })
+        .eq("id", user.id);
+      if (error) {
+        throw new ApiHttpError(400, error.code === "23505" ? "That username is already taken." : "Could not save profile.", "validation");
       }
-      const next = putMockProfile({
-        ...current,
-        displayName: String(body.displayName ?? body.display_name ?? current.displayName),
-        firstName: String(body.firstName ?? body.first_name ?? current.firstName),
-        lastName: String(body.lastName ?? body.last_name ?? current.lastName),
-        phone: (body.phone as string) ?? current.phone,
-        username: String(body.username ?? current.username),
-        avatarUrl: (body.avatarUrl as string) ?? (body.avatar_url as string) ?? current.avatarUrl,
-        profileCompleted: true,
-      });
-      return json({ user: next });
+      return json({ user: { ...user, username, fullName, displayName: fullName, phone, avatarUrl } });
     }
     if (path[0] === "account" && path[1] === "addresses" && path.length === 3) {
       const user = await requireUser(req);
@@ -386,6 +435,11 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
     }
     if (path[0] === "admin" && path[1] === "products" && path.length === 3) {
       await requireAdmin(req);
+      if (getDataProvider() === "supabase") {
+        const archived = await fastapiAdmin(`/products/${path[2]}`, { method: "DELETE" });
+        revalidateStorefront();
+        return json(archived);
+      }
       const archived = archiveProduct(Number(path[2]));
       await audit(req, "product.archive", "product", archived.id, `Archived ${archived.name}`);
       return json(archived);

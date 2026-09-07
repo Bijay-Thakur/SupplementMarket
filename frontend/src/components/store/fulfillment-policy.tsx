@@ -27,7 +27,7 @@ export function FulfillmentPolicy() {
         </p>
       )}
       <p className="mt-4 text-sm">
-        Online card payment is not enabled in this demonstration. Submitting checkout
+        Online card payment is not enabled yet. Submitting checkout
         sends an order request only.
       </p>
     </PolicyShell>

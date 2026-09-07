@@ -59,7 +59,7 @@ export default function CatalogImportRunPage() {
       <h1 className="font-display text-3xl font-semibold">Import run {runId}</h1>
       {run.data && (
         <p className="mt-1 text-sm text-[color:var(--muted)]">
-          Status: {run.data.status} · {run.data.product_count} products · demo pricing (not store prices)
+          Status: {run.data.status} · {run.data.product_count} products · sample pricing pending verification
         </p>
       )}
       <div className="mt-4 flex flex-wrap gap-2">

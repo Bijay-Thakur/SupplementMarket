@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { DemoAuthBanner } from "@/components/auth/demo-banner";
 import { PasswordField } from "@/components/auth/password-field";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -12,12 +11,10 @@ export default function SignUpForm() {
   const router = useRouter();
   const [form, setForm] = useState({
     username: "",
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    acceptedTerms: false,
   });
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -26,9 +23,6 @@ export default function SignUpForm() {
   return (
     <Container className="max-w-md py-12">
       <h1 className="font-display text-3xl font-semibold">Create account</h1>
-      <div className="mt-4">
-        <DemoAuthBanner />
-      </div>
       <form
         className="mt-6 space-y-4"
         onSubmit={async (e) => {
@@ -47,45 +41,65 @@ export default function SignUpForm() {
               detail?: string;
               fields?: Record<string, string>;
               needsVerification?: boolean;
+              redirectTo?: string;
             };
             if (!res.ok) {
               setFields(data.fields ?? {});
               setError(data.detail || "Could not create the account.");
               return;
             }
-            router.push(data.needsVerification ? "/auth/sign-in" : "/account");
+            router.push(data.redirectTo || (data.needsVerification ? "/auth/check-email" : "/account"));
             router.refresh();
+          } catch {
+            setError("The network request failed. Try again.");
           } finally {
             setPending(false);
           }
         }}
       >
-        <Field id="username" label="Username" autoComplete="username" value={form.username} error={fields.username} onChange={(username) => setForm({ ...form, username })} />
-        <Field id="firstName" label="First name" autoComplete="given-name" value={form.firstName} error={fields.firstName} onChange={(firstName) => setForm({ ...form, firstName })} />
-        <Field id="lastName" label="Last name" autoComplete="family-name" value={form.lastName} error={fields.lastName} onChange={(lastName) => setForm({ ...form, lastName })} />
-        <Field id="email" label="Email" type="email" autoComplete="email" value={form.email} error={fields.email} onChange={(email) => setForm({ ...form, email })} />
-        <PasswordField id="password" label="Password" autoComplete="new-password" required value={form.password} onChange={(password) => setForm({ ...form, password })} error={fields.password} />
-        <PasswordField id="confirmPassword" label="Confirm password" autoComplete="new-password" required value={form.confirmPassword} onChange={(confirmPassword) => setForm({ ...form, confirmPassword })} error={fields.confirmPassword} />
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.acceptedTerms}
-            onChange={(e) => setForm({ ...form, acceptedTerms: e.target.checked })}
-            className="mt-1"
-          />
-          <span>
-            I agree to the{" "}
-            <Link href="/privacy" className="underline">
-              Privacy Policy
-            </Link>{" "}
-            and{" "}
-            <Link href="/terms" className="underline">
-              Terms
-            </Link>
-            .
-          </span>
-        </label>
-        {fields.acceptedTerms && <p className="text-sm text-[color:var(--danger)]">{fields.acceptedTerms}</p>}
+        <Field
+          id="username"
+          label="Username"
+          autoComplete="username"
+          value={form.username}
+          error={fields.username}
+          onChange={(username) => setForm({ ...form, username })}
+        />
+        <Field
+          id="fullName"
+          label="Full name"
+          autoComplete="name"
+          value={form.fullName}
+          error={fields.fullName}
+          onChange={(fullName) => setForm({ ...form, fullName })}
+        />
+        <Field
+          id="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          value={form.email}
+          error={fields.email}
+          onChange={(email) => setForm({ ...form, email })}
+        />
+        <PasswordField
+          id="password"
+          label="Password"
+          autoComplete="new-password"
+          required
+          value={form.password}
+          onChange={(password) => setForm({ ...form, password })}
+          error={fields.password}
+        />
+        <PasswordField
+          id="confirmPassword"
+          label="Confirm password"
+          autoComplete="new-password"
+          required
+          value={form.confirmPassword}
+          onChange={(confirmPassword) => setForm({ ...form, confirmPassword })}
+          error={fields.confirmPassword}
+        />
         {error && <p className="text-sm text-[color:var(--danger)]">{error}</p>}
         <button type="submit" disabled={pending} className={buttonVariants({ size: "lg", className: "w-full" })}>
           {pending ? "Creating…" : "Create account"}

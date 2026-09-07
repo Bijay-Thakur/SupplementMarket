@@ -14,9 +14,8 @@ export default function CatalogImportsPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold">Brand catalog imports</h1>
           <p className="mt-1 max-w-2xl text-sm text-[color:var(--muted)]">
-            Official manufacturer sources used to build this demo catalog. Live re-collection
-            needs the local Python collector. On Vercel, browse and edit the already-imported
-            catalog instead.
+            Official manufacturer sources for the catalog. Live re-collection
+            needs the local Python collector.
           </p>
         </div>
         <div className="flex gap-2">

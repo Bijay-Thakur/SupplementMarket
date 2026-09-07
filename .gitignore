@@ -11,10 +11,13 @@ node_modules/
 !.yarn/versions
 
 # testing
-/coverage
-/.screenshots
-/test-results
-/playwright-report
+coverage/
+.screenshots/
+test-results/
+playwright-report/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # next.js
 .next/

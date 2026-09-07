@@ -12,14 +12,16 @@ export function Logo({
   className,
   showWordmark = true,
   markSize = 44,
+  href = "/",
 }: {
   className?: string;
   showWordmark?: boolean;
   markSize?: number;
+  href?: string;
 }) {
   return (
     <Link
-      href="/"
+      href={href}
       className={cn("inline-flex items-center gap-3", className)}
       aria-label="Bronxville Natural Market — home"
     >

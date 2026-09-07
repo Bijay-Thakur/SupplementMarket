@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import exists, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Brand, Category, Product, ProductTag, Tag
+from app.models import Brand, Category, CatalogImportRun, Product, ProductImage, ProductTag, Tag
 from app.services.search import tokenize_query
 
 DIETARY_KEYS = (
@@ -275,9 +275,34 @@ def admin_counts(db: Session) -> dict[str, int]:
             Product.is_archived.is_(False), Product.is_new.is_(True)
         )
     ).scalar_one()
+    total_products = db.execute(
+        select(func.count()).select_from(Product).where(Product.is_archived.is_(False))
+    ).scalar_one()
+    draft_products = db.execute(
+        select(func.count()).select_from(Product).where(
+            Product.is_archived.is_(False), Product.is_active.is_(False)
+        )
+    ).scalar_one()
+    brand_count = db.execute(select(func.count()).select_from(Brand)).scalar_one()
+    category_count = db.execute(select(func.count()).select_from(Category)).scalar_one()
+    missing_images = db.execute(
+        select(func.count())
+        .select_from(Product)
+        .where(
+            Product.is_archived.is_(False),
+            ~exists(select(ProductImage.id).where(ProductImage.product_id == Product.id)),
+        )
+    ).scalar_one()
+    recent_import_count = db.execute(select(func.count()).select_from(CatalogImportRun)).scalar_one()
     return {
         "active_products": active,
         "on_sale": on_sale,
         "out_of_stock": out_of_stock,
         "new_products": new_products,
+        "total_products": total_products,
+        "draft_products": draft_products,
+        "brand_count": brand_count,
+        "category_count": category_count,
+        "missing_images": missing_images,
+        "recent_import_count": recent_import_count,
     }

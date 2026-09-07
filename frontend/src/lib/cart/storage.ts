@@ -7,7 +7,7 @@ export const CART_STORAGE_KEY = "bnm-cart-v1";
 export const CART_VERSION = 1;
 
 export type CartItem = {
-  productId: number;
+  productId: number | string;
   slug: string;
   name: string;
   brandName: string;
@@ -35,7 +35,7 @@ export function loadCart(): CartState {
       version: CART_VERSION,
       items: parsed.items.filter(
         (i) =>
-          typeof i.productId === "number" &&
+          (typeof i.productId === "number" || typeof i.productId === "string") &&
           typeof i.quantity === "number" &&
           i.quantity > 0 &&
           i.quantity <= 99,

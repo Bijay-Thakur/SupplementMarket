@@ -78,9 +78,8 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
         description=(
-            "Local demonstration backend. Admin and seed/reset endpoints are "
-            "DEVELOPMENT-ONLY and are NOT protected by authentication in this phase. "
-            "Supabase auth + server-verified admin authorization are added later."
+            "Local backend. Live catalog-admin routes require a verified Supabase "
+            "administrator JWT. SQLite demo seed/reset remain development-only."
         ),
     )
 
@@ -88,7 +87,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
@@ -135,18 +134,28 @@ def create_app() -> FastAPI:
     v1 = settings.api_v1_prefix
     app.include_router(routes_products.router, prefix=v1)
     app.include_router(routes_catalog.public, prefix=v1)
-    app.include_router(routes_catalog.admin, prefix=v1)
-    app.include_router(routes_admin_products.router, prefix=v1)
     app.include_router(routes_images.router, prefix=v1)
-    app.include_router(routes_imports.router, prefix=v1)
-    app.include_router(routes_catalog_imports.sources_router, prefix=v1)
-    app.include_router(routes_catalog_imports.imports_router, prefix=v1)
     app.include_router(routes_orders.public, prefix=v1)
-    app.include_router(routes_orders.admin, prefix=v1)
     app.include_router(routes_store.router, prefix=v1)
     app.include_router(routes_promotions.public, prefix=v1)
-    app.include_router(routes_promotions.admin, prefix=v1)
-    app.include_router(routes_dev.router, prefix=v1)
+
+    # Dev-only surfaces (SQLite demo admin/seed/reset, no real auth) are only
+    # gated by the `require_dev` dependency, which fails open if the deploy
+    # forgets to set ENVIRONMENT/APP_ENV. As defense in depth, don't even
+    # mount these routers unless the backend is explicitly running in dev.
+    if settings.is_development:
+        app.include_router(routes_catalog.admin, prefix=v1)
+        app.include_router(routes_admin_products.router, prefix=v1)
+        app.include_router(routes_imports.router, prefix=v1)
+        app.include_router(routes_catalog_imports.sources_router, prefix=v1)
+        app.include_router(routes_catalog_imports.imports_router, prefix=v1)
+        app.include_router(routes_orders.admin, prefix=v1)
+        app.include_router(routes_promotions.admin, prefix=v1)
+        app.include_router(routes_dev.router, prefix=v1)
+
+    from app.api import routes_admin_csv
+
+    app.include_router(routes_admin_csv.router, prefix=v1)
     return app
 
 

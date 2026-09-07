@@ -6,5 +6,5 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ProductEditor productId={Number(id)} />;
+  return <ProductEditor productId={id} />;
 }

@@ -4,20 +4,31 @@ import { describe, expect, it } from "vitest";
 import { BrandCard } from "@/components/catalog/brand-card";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const sql = readFileSync(
-  path.join(process.cwd(), "../supabase/migrations/20260902120000_init_commerce.sql"),
+const catalogSql = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260903030807_product_catalog.sql"),
+  "utf8",
+);
+const importSql = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260903040000_catalog_import_fields.sql"),
+  "utf8",
+);
+const adminAuthSql = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260903050000_admin_catalog_authorization.sql"),
   "utf8",
 );
 
-describe("committed supabase migration", () => {
-  it("enables RLS and admin checks", () => {
-    expect(sql).toMatch(/enable row level security/i);
-    expect(sql).toMatch(/is_admin/);
-    expect(sql).toMatch(/user_roles/);
-    expect(sql).toMatch(/create table if not exists public.profiles/);
-    expect(sql).toMatch(/create table if not exists public.payments/);
-    expect(sql).toMatch(/revoke all on public.payments from anon, authenticated/i);
-    expect(sql).not.toMatch(/grant all on public.profiles to anon/i);
+describe("committed supabase catalog migrations", () => {
+  it("enables RLS and keeps catalog writes off public roles", () => {
+    expect(catalogSql).toMatch(/enable row level security/i);
+    expect(catalogSql).toMatch(/revoke all on public.products from anon, authenticated/i);
+    expect(catalogSql).toMatch(/grant select on public.products to anon, authenticated/i);
+    expect(catalogSql).not.toMatch(/grant insert on public.products to anon/i);
+    expect(importSql).toMatch(/cost_price_cents/);
+    expect(importSql).toMatch(/revoke all on public.catalog_import_batches from anon, authenticated/i);
+    expect(importSql).not.toMatch(/grant insert on storage.objects to anon/i);
+    expect(adminAuthSql).toMatch(/Admins write products/);
+    expect(adminAuthSql).toMatch(/grant insert, update, delete on public.products to authenticated/);
+    expect(adminAuthSql).toMatch(/Admins insert product images/);
   });
 });
 

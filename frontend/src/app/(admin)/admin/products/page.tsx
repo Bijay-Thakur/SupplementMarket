@@ -17,14 +17,26 @@ import { AvailabilityBadge } from "@/components/catalog/availability-badge";
 export default function AdminProductsPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+  const [brand, setBrand] = useState("");
+  const [category, setCategory] = useState("");
+  const [availability, setAvailability] = useState("");
   const qc = useQueryClient();
   const list = useQuery({
-    queryKey: ["admin-products", q, page],
-    queryFn: () => adminProducts({ q: q || undefined, page, page_size: 25, sort: "newest" }),
+    queryKey: ["admin-products", q, page, brand, category, availability],
+    queryFn: () =>
+      adminProducts({
+        q: q || undefined,
+        brand: brand || undefined,
+        category: category || undefined,
+        availability: availability || undefined,
+        page,
+        page_size: 25,
+        sort: "newest",
+      }),
   });
 
   const patch = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+    mutationFn: ({ id, body }: { id: number | string; body: Record<string, unknown> }) =>
       adminUpdateProduct(id, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-products"] }),
   });
@@ -37,22 +49,65 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold">Products</h1>
           <p className="mt-1 text-sm text-[color:var(--muted)]">
-            Demo rows are labeled. Archive instead of deleting. Prices are integer cents.
+            Archive instead of deleting. Prices are integer cents.
           </p>
         </div>
-        <Link href="/admin/products/new" className={buttonVariants()}>
-          Add product
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/products/import" className={buttonVariants({ variant: "secondary" })}>
+            Upload CSV
+          </Link>
+          <Link href="/admin/products/imports" className={buttonVariants({ variant: "secondary" })}>
+            Import history
+          </Link>
+          <Link href="/admin/products/new" className={buttonVariants()}>
+            Add product
+          </Link>
+        </div>
       </div>
       <input
         className="mt-6 h-11 w-full max-w-md rounded-[--radius] border border-[color:var(--border)] px-3"
-        placeholder="Search name, SKU, brand…"
+        placeholder="Search name, UPC, SKU, or brand…"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
           setPage(1);
         }}
       />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          className="h-10 rounded-[--radius] border border-[color:var(--border)] px-3 text-sm"
+          placeholder="Brand slug"
+          value={brand}
+          onChange={(e) => {
+            setBrand(e.target.value);
+            setPage(1);
+          }}
+        />
+        <input
+          className="h-10 rounded-[--radius] border border-[color:var(--border)] px-3 text-sm"
+          placeholder="Category slug"
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(1);
+          }}
+        />
+        <select
+          className="h-10 rounded-[--radius] border border-[color:var(--border)] px-3 text-sm"
+          value={availability}
+          onChange={(e) => {
+            setAvailability(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All availability</option>
+          {["in_stock", "low_stock", "out_of_stock", "coming_soon"].map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+      </div>
       {list.isError && <p className="mt-4 text-[color:var(--danger)]">Failed to load products.</p>}
       <div className="mt-4 overflow-x-auto rounded-[--radius] border border-[color:var(--border)] bg-surface">
         <table className="min-w-full text-left text-sm">
@@ -78,8 +133,8 @@ export default function AdminProductsPage() {
                       </Link>
                       <p className="text-xs text-[color:var(--muted)]">
                         {r.brand_name}
-                        {r.is_demo ? " · Demo data" : ""}
-                        {r.price_is_demo ? " · Demo pricing" : ""}
+                        {r.is_demo ? " · Sample data" : ""}
+                        {r.price_is_demo ? " · Sample pricing" : ""}
                         {r.image_use_status ? ` · Image: ${r.image_use_status}` : ""}
                         {r.is_archived ? " · Archived" : ""}
                       </p>

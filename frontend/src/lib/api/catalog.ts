@@ -99,7 +99,7 @@ export function adminProducts(params: ProductQuery & { availability?: string } =
   );
 }
 
-export function adminGetProduct(id: number) {
+export function adminGetProduct(id: number | string) {
   return apiFetch<ProductDetail>(`/api/v1/admin/products/${id}`);
 }
 
@@ -110,18 +110,28 @@ export function adminCreateProduct(body: unknown) {
   });
 }
 
-export function adminUpdateProduct(id: number, body: unknown) {
+export function adminUpdateProduct(id: number | string, body: unknown) {
   return apiFetch<ProductDetail>(`/api/v1/admin/products/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
 }
 
-export function adminArchiveProduct(id: number) {
+export function adminArchiveProduct(id: number | string) {
   return apiFetch<ProductDetail>(`/api/v1/admin/products/${id}`, { method: "DELETE" });
 }
 
-export function adminDuplicateProduct(id: number) {
+export function adminUploadProductImage(id: number | string, file: File, altText = "") {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("alt_text", altText);
+  return apiFetch<{ ok: boolean; storage_path?: string }>(`/api/admin/products/${id}/image`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function adminDuplicateProduct(id: number | string) {
   return apiFetch<ProductDetail>(`/api/v1/admin/products/${id}/duplicate`, {
     method: "POST",
   });
@@ -134,6 +144,12 @@ export function adminDashboard() {
     out_of_stock: number;
     new_products: number;
     total_orders: number;
+    total_products?: number;
+    draft_products?: number;
+    brand_count?: number;
+    category_count?: number;
+    missing_images?: number;
+    recent_import_count?: number;
     recent_orders: AdminOrderRow[];
     persistence?: "session" | "database";
     persistence_notice?: string;

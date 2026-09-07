@@ -7,6 +7,7 @@ import {
   adminCreateProduct,
   adminGetProduct,
   adminUpdateProduct,
+  adminUploadProductImage,
   listBrands,
   listCategories,
   listTags,
@@ -18,7 +19,7 @@ import { DIETARY_LABELS } from "@/lib/catalog-copy";
 
 const FORMS = ["capsule", "tablet", "softgel", "gummy", "liquid", "powder", "spray", "cream", "lozenge", "chewable", "other"];
 
-type Props = { productId?: number };
+type Props = { productId?: number | string };
 
 export function ProductEditor({ productId }: Props) {
   const router = useRouter();
@@ -34,11 +35,14 @@ export function ProductEditor({ productId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     name: "",
     sku: "",
-    brand_id: 0,
-    category_id: 0,
+    upc: "",
+    supplier_sku: "",
+    brand_id: "" as number | string,
+    category_id: "" as number | string,
     short_description: "",
     long_description: "",
     form: "capsule",
@@ -65,6 +69,9 @@ export function ProductEditor({ productId }: Props) {
     search_aliases: "",
     ingredient_highlights: "",
     usage_text: "",
+    flavor: "",
+    cost: "",
+    imageAlt: "",
     warnings:
       "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
     tag_ids: [] as number[],
@@ -80,6 +87,8 @@ export function ProductEditor({ productId }: Props) {
       ...f,
       name: p.name,
       sku: p.sku,
+      upc: p.upc ?? "",
+      supplier_sku: "",
       brand_id: p.brand_id ?? f.brand_id,
       category_id: p.category_id ?? f.category_id,
       short_description: p.short_description ?? "",
@@ -137,19 +146,30 @@ export function ProductEditor({ productId }: Props) {
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!form.name || !form.sku || !form.brand_id || !form.category_id) {
-      setError("Name, SKU, brand, and category are required.");
+    if (!form.name || !form.brand_id || !form.category_id) {
+      setError("Name, brand, and category are required.");
+      return;
+    }
+    if (!form.sku && !form.upc && !form.supplier_sku) {
+      setError("Provide at least one of UPC, SKU, or supplier SKU.");
       return;
     }
     if (regularCents < 0) {
       setError("Regular price cannot be negative.");
       return;
     }
+    const brand = brandOptions.find((b) => String(b.id) === String(form.brand_id));
+    const category = catOptions.find((c) => String(c.id) === String(form.category_id));
+    const costCents = form.cost.trim() ? parseDollarsToCents(form.cost) : null;
     const body = {
       name: form.name,
-      sku: form.sku,
+      sku: form.sku || null,
+      upc: form.upc || null,
+      supplier_sku: form.supplier_sku || null,
       brand_id: form.brand_id,
+      brand_name: brand?.name,
       category_id: form.category_id,
+      category_name: category?.name,
       short_description: form.short_description || null,
       long_description: form.long_description || null,
       form: form.form,
@@ -159,6 +179,8 @@ export function ProductEditor({ productId }: Props) {
       strength_unit: form.strength_unit || null,
       regular_price_cents: regularCents,
       sale_price_cents: saleCents,
+      cost_price_cents: costCents,
+      flavor: form.flavor || null,
       remove_sale: saleCents == null,
       availability: form.availability,
       is_active: form.is_active,
@@ -188,10 +210,12 @@ export function ProductEditor({ productId }: Props) {
     try {
       if (productId) {
         await adminUpdateProduct(productId, body);
+        if (imageFile) await adminUploadProductImage(productId, imageFile, form.imageAlt);
         setDirty(false);
         router.refresh();
       } else {
         const created = await adminCreateProduct(body);
+        if (imageFile) await adminUploadProductImage(created.id, imageFile, form.imageAlt);
         setDirty(false);
         router.push(`/admin/products/${created.id}`);
       }
@@ -220,7 +244,13 @@ export function ProductEditor({ productId }: Props) {
           <input className="fld" required value={form.name} onChange={(e) => set("name", e.target.value)} />
         </L>
         <L label="SKU">
-          <input className="fld" required value={form.sku} onChange={(e) => set("sku", e.target.value)} />
+          <input className="fld" value={form.sku} onChange={(e) => set("sku", e.target.value)} />
+        </L>
+        <L label="UPC">
+          <input className="fld" value={form.upc} onChange={(e) => set("upc", e.target.value)} />
+        </L>
+        <L label="Supplier SKU">
+          <input className="fld" value={form.supplier_sku} onChange={(e) => set("supplier_sku", e.target.value)} />
         </L>
         <L label="Short description">
           <input className="fld" value={form.short_description} onChange={(e) => set("short_description", e.target.value)} />
@@ -232,20 +262,20 @@ export function ProductEditor({ productId }: Props) {
 
       <Section title="2. Brand and category">
         <L label="Brand">
-          <select className="fld" value={form.brand_id} onChange={(e) => set("brand_id", Number(e.target.value))}>
-            <option value={0}>Select…</option>
+          <select className="fld" value={String(form.brand_id)} onChange={(e) => set("brand_id", e.target.value)}>
+            <option value="">Select…</option>
             {brandOptions.map((b) => (
-              <option key={b.id} value={b.id}>
+              <option key={String(b.id)} value={String(b.id)}>
                 {b.name}
               </option>
             ))}
           </select>
         </L>
         <L label="Category">
-          <select className="fld" value={form.category_id} onChange={(e) => set("category_id", Number(e.target.value))}>
-            <option value={0}>Select…</option>
+          <select className="fld" value={String(form.category_id)} onChange={(e) => set("category_id", e.target.value)}>
+            <option value="">Select…</option>
             {catOptions.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option key={String(c.id)} value={String(c.id)}>
                 {c.name}
               </option>
             ))}
@@ -274,6 +304,9 @@ export function ProductEditor({ productId }: Props) {
           <L label="Size / volume">
             <input className="fld" value={form.size} onChange={(e) => set("size", e.target.value)} />
           </L>
+          <L label="Flavor">
+            <input className="fld" value={form.flavor} onChange={(e) => set("flavor", e.target.value)} />
+          </L>
         </div>
       </Section>
 
@@ -297,6 +330,9 @@ export function ProductEditor({ productId }: Props) {
                 }
               }}
             />
+          </L>
+          <L label="Wholesale cost ($)">
+            <input className="fld" value={form.cost} onChange={(e) => set("cost", e.target.value)} />
           </L>
         </div>
         <p className="text-sm">
@@ -389,6 +425,23 @@ export function ProductEditor({ productId }: Props) {
         <label className="text-sm">
           <input type="checkbox" checked={form.is_demo} onChange={(e) => set("is_demo", e.target.checked)} /> Demo data
         </label>
+      </Section>
+
+      <Section title="10. Product image (optional)">
+        <L label="Image (JPEG, PNG, WebP, AVIF, max 5 MB)">
+          <input
+            className="fld"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/avif"
+            onChange={(e) => {
+              setDirty(true);
+              setImageFile(e.target.files?.[0] ?? null);
+            }}
+          />
+        </L>
+        <L label="Alt text">
+          <input className="fld" value={form.imageAlt} onChange={(e) => set("imageAlt", e.target.value)} />
+        </L>
       </Section>
 
       {error && <p className="text-[color:var(--danger)]">{error}</p>}

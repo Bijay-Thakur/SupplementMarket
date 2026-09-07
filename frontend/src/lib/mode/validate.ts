@@ -29,8 +29,9 @@ export function validateRuntimeMode(input: RuntimeModeInput): string[] {
     errors.push("SUPABASE_SERVICE_ROLE_KEY must never be prefixed with NEXT_PUBLIC_.");
   }
 
+  const supabasePublicReady = Boolean(input.supabaseUrl && input.supabaseAnonKey);
   const supabaseReady = Boolean(
-    input.supabaseUrl && input.supabaseAnonKey && input.supabaseServiceRoleKey,
+    supabasePublicReady && input.supabaseServiceRoleKey,
   );
   const stripeReady = Boolean(
     input.stripeSecretKey && input.stripeWebhookSecret && input.stripePublishableKey,
@@ -39,8 +40,11 @@ export function validateRuntimeMode(input: RuntimeModeInput): string[] {
   if (input.dataProvider === "supabase" && !supabaseReady) {
     errors.push("DATA_PROVIDER=supabase requires NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY.");
   }
-  if (input.authProvider === "supabase" && !supabaseReady) {
-    errors.push("AUTH_PROVIDER=supabase requires configured Supabase credentials.");
+  if (input.authProvider === "mock") {
+    errors.push("Mock authentication has been removed. Set AUTH_PROVIDER=supabase.");
+  }
+  if (input.authProvider === "supabase" && !supabasePublicReady) {
+    errors.push("AUTH_PROVIDER=supabase requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or ANON_KEY).");
   }
   if (input.customerAuthEnabled && input.authProvider !== "supabase") {
     errors.push("NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED=true requires AUTH_PROVIDER=supabase.");
@@ -77,8 +81,8 @@ export function validateRuntimeMode(input: RuntimeModeInput): string[] {
   ) {
     errors.push("PAYMENT_PROVIDER=stripe_test cannot use a live Stripe secret key.");
   }
-  if (input.mockAuthEnabled && input.authProvider !== "mock") {
-    errors.push("NEXT_PUBLIC_MOCK_AUTH_ENABLED=true requires AUTH_PROVIDER=mock.");
+  if (input.mockAuthEnabled) {
+    errors.push("NEXT_PUBLIC_MOCK_AUTH_ENABLED must be false. Mock authentication has been removed.");
   }
   if (input.nodeEnv === "production" && input.authProvider === "mock" && input.dataProvider === "supabase") {
     errors.push("Production must not combine mock authentication with a real Supabase customer database.");

@@ -8,6 +8,7 @@ import { ProductGrid, ProductGridSkeleton } from "./product-grid";
 import { DIETARY_LABELS } from "@/lib/catalog-copy";
 import { cn } from "@/lib/utils/cn";
 import { Container } from "@/components/ui/container";
+import { SampleCatalogNotice } from "@/components/catalog/sample-catalog-notice";
 
 function setParam(sp: URLSearchParams, key: string, value: string | null) {
   if (!value) sp.delete(key);
@@ -104,10 +105,7 @@ export function CatalogBrowser({
       <div className="mb-8">
         <h1 className="font-display text-3xl font-semibold">{title}</h1>
         {description && <p className="mt-2 max-w-2xl text-[color:var(--muted)]">{description}</p>}
-        <p className="mt-2 text-xs text-[color:var(--muted)]">
-          Demonstration catalog from official manufacturer pages. Prices are demo
-          pricing, not the store&apos;s shelf prices.
-        </p>
+        <SampleCatalogNotice />
       </div>
 
       <div className="mb-4 lg:hidden">

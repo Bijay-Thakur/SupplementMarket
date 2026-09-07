@@ -9,6 +9,7 @@
     "dev": "npm run dev -w frontend",
     "dev:web": "npm run dev -w frontend",
     "dev:api": "node scripts/run-python.mjs -m uvicorn app.main:app --reload --port 8000",
+    "dev:backend": "npm run dev:api",
     "dev:all": "concurrently -n web,api -c magenta,green \"npm run dev:web\" \"npm run dev:api\"",
     "build": "npm run build -w frontend",
     "start": "npm run start -w frontend",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "supabase": "^2.116.0"
   }
 }

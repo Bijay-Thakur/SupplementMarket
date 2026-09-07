@@ -8,10 +8,13 @@ const serverSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STORE_TIMEZONE: z.string().min(1).default("America/New_York"),
-  AUTH_PROVIDER: z.enum(["mock", "supabase"]).default("mock"),
+  AUTH_PROVIDER: z.enum(["mock", "supabase"]).default("supabase"),
   DATA_PROVIDER: z.enum(["snapshot", "supabase"]).default("snapshot"),
   PAYMENT_PROVIDER: z.enum(["disabled", "stripe_test", "stripe_live"]).default("disabled"),
   MOCK_AUTH_SECRET: z.string().optional(),
+  APP_ENV: z.string().optional(),
+  ADMIN_INTERNAL_SECRET: z.string().optional(),
+  FASTAPI_ORIGIN: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -20,10 +23,13 @@ const parsed = serverSchema.safeParse({
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STORE_TIMEZONE: process.env.STORE_TIMEZONE,
-  AUTH_PROVIDER: process.env.AUTH_PROVIDER ?? "mock",
+  AUTH_PROVIDER: process.env.AUTH_PROVIDER ?? "supabase",
   DATA_PROVIDER: process.env.DATA_PROVIDER ?? "snapshot",
   PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER ?? "disabled",
   MOCK_AUTH_SECRET: process.env.MOCK_AUTH_SECRET,
+  APP_ENV: process.env.APP_ENV,
+  ADMIN_INTERNAL_SECRET: process.env.ADMIN_INTERNAL_SECRET,
+  FASTAPI_ORIGIN: process.env.FASTAPI_ORIGIN,
   NODE_ENV: process.env.NODE_ENV,
 });
 
@@ -34,8 +40,8 @@ if (!parsed.success) {
 
 const data = parsed.data;
 
-if (process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("SUPABASE_SERVICE_ROLE_KEY must never be prefixed with NEXT_PUBLIC_.");
+if (process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SECRET_KEY) {
+  throw new Error("Supabase secret keys must never be prefixed with NEXT_PUBLIC_.");
 }
 
 assertRuntimeMode({
@@ -55,15 +61,6 @@ assertRuntimeMode({
   nodeEnv: data.NODE_ENV,
 });
 
-if (
-  data.AUTH_PROVIDER === "mock" &&
-  data.NODE_ENV === "production" &&
-  !(data.DATA_PROVIDER === "snapshot" && data.PAYMENT_PROVIDER === "disabled") &&
-  !data.MOCK_AUTH_SECRET
-) {
-  throw new Error("AUTH_PROVIDER=mock in production requires MOCK_AUTH_SECRET unless DATA_PROVIDER=snapshot and PAYMENT_PROVIDER=disabled.");
-}
-
 export const serverEnv = {
   ...publicEnv,
   supabaseServiceRoleKey: data.SUPABASE_SERVICE_ROLE_KEY || undefined,
@@ -73,13 +70,12 @@ export const serverEnv = {
   authProvider: data.AUTH_PROVIDER as AuthProvider,
   dataProvider: data.DATA_PROVIDER as DataProvider,
   paymentProvider: data.PAYMENT_PROVIDER as PaymentProvider,
-  mockAuthSecret:
-    data.MOCK_AUTH_SECRET ||
-    (data.NODE_ENV === "production" && data.DATA_PROVIDER === "snapshot"
-      ? "bnm-hosted-demo-mock-secret-not-for-customer-data"
-      : "bnm-dev-mock-secret-not-for-production"),
+  mockAuthSecret: "",
   nodeEnv: data.NODE_ENV,
   isProduction: data.NODE_ENV === "production",
+  appEnv: (data.APP_ENV || "development").toLowerCase(),
+  adminInternalSecret: data.ADMIN_INTERNAL_SECRET || "",
+  fastapiOrigin: (data.FASTAPI_ORIGIN || "http://localhost:8000").replace(/\/$/, ""),
 } as const;
 
 export const supabaseServiceConfigured = Boolean(

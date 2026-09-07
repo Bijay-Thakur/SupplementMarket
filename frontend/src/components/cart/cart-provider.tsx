@@ -15,8 +15,8 @@ type CartContextValue = {
   count: number;
   subtotalCents: number;
   add: (item: Omit<CartItem, "quantity">, qty?: number) => void;
-  setQty: (productId: number, qty: number) => void;
-  remove: (productId: number) => void;
+  setQty: (productId: number | string, qty: number) => void;
+  remove: (productId: number | string) => void;
   clear: () => void;
 };
 
@@ -61,7 +61,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     persist({ version: 1, items });
   }, []);
 
-  const setQty = useCallback((productId: number, qty: number) => {
+  const setQty = useCallback((productId: number | string, qty: number) => {
     const current = loadCart();
     const items =
       qty <= 0
@@ -72,7 +72,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     persist({ version: 1, items });
   }, []);
 
-  const remove = useCallback((productId: number) => {
+  const remove = useCallback((productId: number | string) => {
     const current = loadCart();
     persist({
       version: 1,

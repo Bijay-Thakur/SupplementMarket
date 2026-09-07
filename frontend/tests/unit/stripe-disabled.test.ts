@@ -6,6 +6,7 @@ describe("stripe-disabled checkout", () => {
     resetDemoStore();
     expect(() =>
       createOrder({
+        user_id: "00000000-0000-4000-a000-000000000001",
         payment_method: "card",
         customer_name: "Test",
         customer_email: "t@example.com",

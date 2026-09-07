@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Menu, X, CircleUserRound } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { PRIMARY_NAV } from "@/lib/config/navigation";
-import { features } from "@/lib/config/features";
+import { AccountMenu } from "./account-menu";
+import { SwitchExperienceButton } from "@/components/entry/entry-experience";
 
-/**
- * Mobile navigation slide-over. Focus is moved into the panel on open, Escape
- * closes it, body scroll is locked, and focus returns to the trigger on close.
- */
-export function MobileNav() {
+export function MobileNav({
+  signedIn,
+  email,
+}: {
+  signedIn: boolean;
+  email?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -84,15 +87,30 @@ export function MobileNav() {
                   {item.label}
                 </Link>
               ))}
-              {(features.mockAuth || features.customerAuth) && (
-                <Link
-                  href="/account"
-                  onClick={() => setOpen(false)}
-                  className="inline-flex items-center gap-3 rounded-[--radius] px-3 py-3 text-[color:var(--brand-ink)] hover:bg-[color:var(--brand-cream)]"
-                  aria-label="Account"
-                >
-                  <CircleUserRound className="h-5 w-5" aria-hidden />
-                </Link>
+              {!signedIn ? (
+                <>
+                  <Link
+                    href="/auth/sign-in"
+                    onClick={() => setOpen(false)}
+                    className="rounded-[--radius] px-3 py-3 text-base font-medium hover:bg-[color:var(--brand-cream)]"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/sign-up"
+                    onClick={() => setOpen(false)}
+                    className="rounded-[--radius] px-3 py-3 text-base font-medium hover:bg-[color:var(--brand-cream)]"
+                  >
+                    Create Account
+                  </Link>
+                  <div className="mt-4 px-3">
+                    <SwitchExperienceButton />
+                  </div>
+                </>
+              ) : (
+                <div className="mt-2">
+                  <AccountMenu email={email} compact />
+                </div>
               )}
             </nav>
           </div>

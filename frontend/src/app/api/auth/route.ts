@@ -1,154 +1,253 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { serverEnv } from "@/lib/env/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createCookieRecordingClient, jsonWithAuthCookies } from "@/lib/supabase/route";
 import { publicEnv } from "@/lib/env/public";
-import { AUTH_GENERIC_ERROR, PASSWORD_RESET_GENERIC, safeNextPath, validatePassword, validateSignUp } from "@/lib/auth/types";
-import { getUserFromCookieStore } from "@/lib/auth/server";
-import { mockForgotPassword, mockGoogle, mockPasswordSignIn, mockSignOut, mockSignUp } from "@/lib/auth/mock-actions";
+import {
+  ADMIN_FORBIDDEN_MESSAGE,
+  AUTH_GENERIC_ERROR,
+  DUPLICATE_USERNAME_MESSAGE,
+  EMAIL_DELIVERY_UNAVAILABLE_MESSAGE,
+  EMAIL_RATE_LIMIT_MESSAGE,
+  EXPIRED_LINK_MESSAGE,
+  NETWORK_FAILURE_MESSAGE,
+  PASSWORD_RESET_GENERIC,
+  SIGNUP_GENERIC_ERROR,
+  UNCONFIRMED_EMAIL_MESSAGE,
+} from "@/lib/auth/types";
+import { emailOnlySchema, resetPasswordSchema, signInSchema, signUpSchema } from "@/lib/auth/schemas";
+import { getAuthenticatedUser } from "@/lib/auth/server";
+import { resolvePasswordSignIn } from "@/lib/auth/password-sign-in";
 import { AuthHttpError } from "@/lib/auth/contract";
+import type { PendingAuthCookie } from "@/lib/supabase/cookies";
+import { assertSameOrigin } from "@/lib/auth/origin";
+
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "private, no-store" };
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: NO_STORE });
+}
+
+function reply(pending: PendingAuthCookie[], data: unknown, status = 200) {
+  return jsonWithAuthCookies(data, pending, status);
+}
+
+function fieldError(
+  pending: PendingAuthCookie[],
+  error: { issues: Array<{ path: PropertyKey[]; message: string }> },
+) {
+  const fields: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "form");
+    if (!fields[key]) fields[key] = issue.message;
+  }
+  return reply(pending, { error: "validation", detail: "Please correct the highlighted fields.", fields }, 400);
+}
+
+function mapAuthError(message: string | undefined, fallback = AUTH_GENERIC_ERROR) {
+  const text = (message || "").toLowerCase();
+  if (text.includes("rate limit")) {
+    return EMAIL_RATE_LIMIT_MESSAGE;
+  }
+  if (
+    text.includes("email address not authorized") ||
+    text.includes("email delivery") ||
+    text.includes("sending confirmation email") ||
+    text.includes("smtp")
+  ) {
+    return EMAIL_DELIVERY_UNAVAILABLE_MESSAGE;
+  }
+  if (text.includes("email not confirmed") || text.includes("email_not_confirmed")) {
+    return UNCONFIRMED_EMAIL_MESSAGE;
+  }
+  if (text.includes("expired") || text.includes("otp") || text.includes("reuse")) {
+    return EXPIRED_LINK_MESSAGE;
+  }
+  if (text.includes("already registered") || text.includes("user already")) {
+    return AUTH_GENERIC_ERROR;
+  }
+  if (text.includes("weak") || text.includes("password")) {
+    return message && message.length < 160 ? message : "Choose a stronger password.";
+  }
+  if (text.includes("fetch") || text.includes("network")) {
+    return NETWORK_FAILURE_MESSAGE;
+  }
+  return fallback;
+}
+
+async function usernameTaken(username: string): Promise<boolean> {
+  const admin = getSupabaseAdminClient();
+  if (!admin) return false;
+  // PostgreSQL ILIKE treats underscores as wildcards. Escape them so a
+  // username such as "jane_doe" is checked as an exact case-insensitive value.
+  const exactPattern = username.replaceAll("_", "\\_");
+  const { data, error } = await admin.from("profiles").select("id").ilike("username", exactPattern).maybeSingle();
+  if (error) throw new Error("Username availability check failed.");
+  return Boolean(data);
+}
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch {
+    return NextResponse.json({ error: "forbidden", detail: "Invalid request origin." }, { status: 403 });
+  }
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "sign-in";
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const { supabase, pending } = createCookieRecordingClient(req);
 
   try {
+    if (!supabase) {
+      return reply(pending, { error: "config", detail: "Supabase is not configured." }, 503);
+    }
+
     if (action === "sign-out") {
-      if (serverEnv.authProvider === "mock") return mockSignOut();
-      const supabase = await getSupabaseServerClient();
-      await supabase?.auth.signOut();
-      return NextResponse.json({ ok: true });
+      await supabase.auth.signOut();
+      return reply(pending, { ok: true });
     }
 
     if (action === "forgot-password") {
-      if (serverEnv.authProvider === "mock") return mockForgotPassword();
-      const supabase = await getSupabaseServerClient();
-      if (supabase && typeof body.email === "string") {
-        await supabase.auth.resetPasswordForEmail(body.email, {
-          redirectTo: `${publicEnv.siteUrl}/auth/reset-password`,
+      const parsed = emailOnlySchema.safeParse(body);
+      if (parsed.success) {
+        await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+          redirectTo: `${publicEnv.siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`,
         });
       }
-      return NextResponse.json({ message: PASSWORD_RESET_GENERIC });
+      return reply(pending, { message: PASSWORD_RESET_GENERIC });
     }
 
-    if (action === "google") {
-      if (serverEnv.authProvider === "mock") {
-        const hint = body.roleHint === "admin" ? "admin" : "customer";
-        return mockGoogle(hint);
+    if (action === "resend-confirmation") {
+      const parsed = emailOnlySchema.safeParse(body);
+      if (parsed.success) {
+        await supabase.auth.resend({
+          type: "signup",
+          email: parsed.data.email,
+          options: { emailRedirectTo: `${publicEnv.siteUrl}/auth/callback` },
+        });
       }
-      const supabase = await getSupabaseServerClient();
-      if (!supabase) {
-        return NextResponse.json({ error: "config", detail: "Supabase is not configured." }, { status: 503 });
-      }
-      const next = safeNextPath(typeof body.next === "string" ? body.next : null);
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${publicEnv.siteUrl}/auth/callback?next=${encodeURIComponent(next)}` },
+      return reply(pending, {
+        message: "If that address still needs confirmation, another email is on the way.",
       });
-      if (error || !data.url) {
-        return NextResponse.json({ error: "auth", detail: AUTH_GENERIC_ERROR }, { status: 400 });
-      }
-      return NextResponse.json({ redirectTo: data.url });
-    }
-
-    if (action === "demo-continue") {
-      if (serverEnv.authProvider !== "mock") {
-        return NextResponse.json({ error: "forbidden", detail: "Demo authentication is disabled." }, { status: 403 });
-      }
-      const role = body.role === "admin" ? "admin" : "customer";
-      return mockGoogle(role);
     }
 
     if (action === "sign-up") {
-      if (serverEnv.authProvider === "mock") {
-        return mockSignUp({
-          username: String(body.username ?? ""),
-          firstName: String(body.firstName ?? ""),
-          lastName: String(body.lastName ?? ""),
-          email: String(body.email ?? ""),
-          password: String(body.password ?? ""),
-          confirmPassword: String(body.confirmPassword ?? ""),
-          acceptedTerms: Boolean(body.acceptedTerms),
-        });
+      if ("role" in body) {
+        return reply(pending, { error: "validation", detail: "Role cannot be chosen during signup." }, 400);
       }
-      const input = {
-        username: String(body.username ?? ""),
-        firstName: String(body.firstName ?? ""),
-        lastName: String(body.lastName ?? ""),
-        email: String(body.email ?? ""),
-        password: String(body.password ?? ""),
-        confirmPassword: String(body.confirmPassword ?? ""),
-        acceptedTerms: Boolean(body.acceptedTerms),
-      };
-      const fields = validateSignUp(input);
-      if (Object.keys(fields).length) {
-        return NextResponse.json({ error: "validation", detail: "Please correct the highlighted fields.", fields }, { status: 400 });
+      const parsed = signUpSchema.safeParse(body);
+      if (!parsed.success) return fieldError(pending, parsed.error);
+      if (await usernameTaken(parsed.data.username)) {
+        return reply(
+          pending,
+          { error: "validation", detail: DUPLICATE_USERNAME_MESSAGE, fields: { username: DUPLICATE_USERNAME_MESSAGE } },
+          400,
+        );
       }
-      const supabase = await getSupabaseServerClient();
-      if (!supabase) {
-        return NextResponse.json({ error: "config", detail: "Supabase is not configured." }, { status: 503 });
-      }
-      const { error } = await supabase.auth.signUp({
-        email: input.email,
-        password: input.password,
+      const { data, error } = await supabase.auth.signUp({
+        email: parsed.data.email,
+        password: parsed.data.password,
         options: {
           data: {
-            username: input.username,
-            first_name: input.firstName,
-            last_name: input.lastName,
-            full_name: `${input.firstName} ${input.lastName}`.trim(),
+            username: parsed.data.username,
+            full_name: parsed.data.fullName,
           },
           emailRedirectTo: `${publicEnv.siteUrl}/auth/callback`,
         },
       });
       if (error) {
-        return NextResponse.json({ error: "auth", detail: AUTH_GENERIC_ERROR }, { status: 400 });
+        console.error("Supabase sign-up failed:", error.message);
+        const mapped = mapAuthError(error.message, SIGNUP_GENERIC_ERROR);
+        if (/redirect/i.test(error.message)) {
+          return reply(
+            pending,
+            {
+              error: "auth",
+              detail:
+                `Supabase rejected the confirmation redirect. Add ${publicEnv.siteUrl}/auth/callback to Authentication → URL Configuration → Redirect URLs.`,
+            },
+            400,
+          );
+        }
+        if (/database/i.test(error.message)) {
+          return reply(
+            pending,
+            {
+              error: "auth",
+              detail: "The account could not be created. Try again or contact the store.",
+            },
+            400,
+          );
+        }
+        const status = /rate limit/i.test(error.message)
+          ? 429
+          : /sending confirmation email|email delivery|smtp/i.test(error.message)
+            ? 502
+            : 400;
+        return reply(pending, { error: "auth", detail: mapped }, status);
       }
-      return NextResponse.json({ ok: true, needsVerification: true });
+      return reply(pending, {
+        ok: true,
+        needsVerification: !data.session,
+        redirectTo: data.session ? "/account" : "/auth/check-email",
+      });
     }
 
     if (action === "update-password") {
-      const pwdErr = validatePassword(String(body.password ?? ""));
-      if (pwdErr) return NextResponse.json({ error: "validation", detail: pwdErr }, { status: 400 });
-      if (serverEnv.authProvider === "mock") {
-        return NextResponse.json({ ok: true, message: "Demo password was not stored." });
+      const parsed = resetPasswordSchema.safeParse(body);
+      if (!parsed.success) return fieldError(pending, parsed.error);
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return reply(pending, { error: "auth", detail: EXPIRED_LINK_MESSAGE }, 401);
       }
-      const supabase = await getSupabaseServerClient();
-      const { error } = await supabase!.auth.updateUser({ password: String(body.password) });
-      if (error) return NextResponse.json({ error: "auth", detail: AUTH_GENERIC_ERROR }, { status: 400 });
-      return NextResponse.json({ ok: true });
+      const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+      if (error) return reply(pending, { error: "auth", detail: mapAuthError(error.message, EXPIRED_LINK_MESSAGE) }, 400);
+      return reply(pending, { ok: true, redirectTo: "/auth/sign-in?reset=1" });
     }
 
-    const email = String(body.email ?? "");
-    const password = String(body.password ?? "");
-    if (serverEnv.authProvider === "mock") return mockPasswordSignIn(email, password);
-    const supabase = await getSupabaseServerClient();
-    if (!supabase) {
-      return NextResponse.json({ error: "config", detail: "Supabase is not configured." }, { status: 503 });
+    if (action !== "sign-in") {
+      return reply(pending, { error: "not_found", detail: "Unknown authentication action." }, 404);
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return NextResponse.json({ error: "auth", detail: AUTH_GENERIC_ERROR }, { status: 401 });
-    const user = await getUserFromCookieStore();
-    return NextResponse.json({ user });
+
+    const parsed = signInSchema.safeParse(body);
+    if (!parsed.success) return fieldError(pending, parsed.error);
+    const result = await resolvePasswordSignIn({
+      supabase,
+      email: parsed.data.email,
+      password: parsed.data.password,
+      portal: parsed.data.portal === "admin" ? "admin" : "customer",
+      next: parsed.data.next,
+    });
+    if ("error" in result) {
+      const status = result.error === ADMIN_FORBIDDEN_MESSAGE ? 403 : 401;
+      return reply(
+        pending,
+        { error: status === 403 ? "forbidden" : "auth", detail: result.error },
+        status,
+      );
+    }
+    return reply(pending, { redirectTo: result.redirectTo, role: result.role });
   } catch (err) {
     if (err instanceof AuthHttpError) {
-      return NextResponse.json({ error: "validation", detail: err.message, fields: err.fields }, { status: err.status });
+      return reply(pending, { error: "validation", detail: err.message, fields: err.fields }, err.status);
     }
-    return NextResponse.json({ error: "error", detail: AUTH_GENERIC_ERROR }, { status: 400 });
+    return reply(pending, { error: "error", detail: AUTH_GENERIC_ERROR }, 400);
   }
 }
 
 export async function GET() {
-  const user = await getUserFromCookieStore();
-  return NextResponse.json({ user });
+  const user = await getAuthenticatedUser();
+  return json({ user });
 }
 
-export async function DELETE() {
-  if (serverEnv.authProvider === "mock") return mockSignOut();
-  const supabase = await getSupabaseServerClient();
+export async function DELETE(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch {
+    return NextResponse.json({ error: "forbidden", detail: "Invalid request origin." }, { status: 403 });
+  }
+  const { supabase, pending } = createCookieRecordingClient(req);
   await supabase?.auth.signOut();
-  const jar = await cookies();
-  jar.getAll();
-  return NextResponse.json({ ok: true });
+  return reply(pending, { ok: true });
 }

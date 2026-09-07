@@ -5,15 +5,12 @@ import { publicEnv, supabasePublicConfigured } from "@/lib/env/public";
  * components so the on/off logic stays in one auditable place.
  */
 export const features = {
-  /** Real customer auth (Supabase). Off until AUTH_PROVIDER=supabase. */
-  customerAuth: publicEnv.customerAuthEnabled,
-  /** Demo authentication UX. Not a real account. */
-  mockAuth: publicEnv.mockAuthEnabled,
-  /**
-   * Development-only customer/admin role chooser. THIS IS NOT AUTHORIZATION.
-   * Admin APIs verify a signed mock cookie or a Supabase role independently.
-   */
-  demoRoleSelector: publicEnv.demoRoleSelectorEnabled,
+  /** Real customer/admin auth through Supabase. */
+  customerAuth: supabasePublicConfigured,
+  /** Mock authentication has been removed. */
+  mockAuth: false,
+  /** Legacy interface selector. Unused; authorization is public.user_roles only. */
+  demoRoleSelector: false,
   /** Public Stripe flag. Server still requires PAYMENT_PROVIDER. */
   stripeEnabled: publicEnv.stripeEnabled,
   /** Whether a real Supabase backend is wired up (vs. placeholder/disabled). */

@@ -1,62 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { DemoAuthBanner } from "@/components/auth/demo-banner";
+import { useSearchParams } from "next/navigation";
 import { PasswordField } from "@/components/auth/password-field";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
-import { features } from "@/lib/config/features";
+import { ADMIN_FORBIDDEN_MESSAGE, AUTH_GENERIC_ERROR, UNCONFIRMED_EMAIL_MESSAGE } from "@/lib/auth/types";
+
+function errorMessage(code: string | null) {
+  if (code === "forbidden") return ADMIN_FORBIDDEN_MESSAGE;
+  if (code === "unconfirmed") return UNCONFIRMED_EMAIL_MESSAGE;
+  if (code === "config") return "Authentication is not configured.";
+  if (code === "auth") return AUTH_GENERIC_ERROR;
+  return null;
+}
+
+function adminNextPath(next: string | null) {
+  if (next && next.startsWith("/admin") && !next.startsWith("/admin/login")) return next;
+  return "/admin";
+}
 
 export default function SignInForm({ admin = false }: { admin?: boolean }) {
-  const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || (admin ? "/admin" : "/account");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const next = admin
+    ? adminNextPath(params.get("next"))
+    : params.get("next") || "/account";
+  const resetOk = params.get("reset") === "1";
+  const error = errorMessage(params.get("error"));
   const [pending, setPending] = useState(false);
-
-  async function submit(action: string, extra: Record<string, unknown> = {}) {
-    setError(null);
-    setPending(true);
-    try {
-      const res = await fetch(`/api/auth?action=${action}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(extra),
-      });
-      const data = (await res.json()) as { detail?: string; redirectTo?: string };
-      if (!res.ok) {
-        setError(data.detail || "Could not complete sign-in.");
-        return;
-      }
-      if (data.redirectTo) {
-        window.location.href = data.redirectTo;
-        return;
-      }
-      router.push(next.startsWith("/") ? next : admin ? "/admin" : "/account");
-      router.refresh();
-    } finally {
-      setPending(false);
-    }
-  }
 
   return (
     <Container className="max-w-md py-12">
       <h1 className="font-display text-3xl font-semibold">{admin ? "Admin sign in" : "Sign in"}</h1>
-      <div className="mt-4">
-        <DemoAuthBanner />
-      </div>
+      {admin ? (
+        <p className="mt-2 text-sm text-[color:var(--muted)]">
+          Sign in with an administrator account. Access is granted only after the
+          server confirms the administrator role.
+        </p>
+      ) : null}
+      {resetOk ? (
+        <p className="mt-4 text-sm text-[color:var(--brand-green)]">Password updated. Sign in with your new password.</p>
+      ) : null}
       <form
+        action="/api/auth/session"
+        method="post"
         className="mt-6 space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit("sign-in", { email, password });
-        }}
+        onSubmit={() => setPending(true)}
       >
+        <input type="hidden" name="portal" value={admin ? "admin" : "customer"} />
+        <input type="hidden" name="next" value={next} />
         <div>
           <label htmlFor="email" className="text-sm font-medium">
             Email
@@ -67,42 +60,21 @@ export default function SignInForm({ admin = false }: { admin?: boolean }) {
             type="email"
             autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
           />
         </div>
         <PasswordField
           id="password"
+          name="password"
           label="Password"
           autoComplete="current-password"
           required
-          value={password}
-          onChange={setPassword}
         />
-        {error && <p className="text-sm text-[color:var(--danger)]">{error}</p>}
-        <button type="submit" disabled={pending} className={buttonVariants({ size: "lg", className: "w-full" })}>
+        {error ? <p className="text-sm text-[color:var(--danger)]">{error}</p> : null}
+        <button type="submit" disabled={pending} aria-busy={pending} className={buttonVariants({ size: "lg", className: "w-full" })}>
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <button
-        type="button"
-        disabled={pending}
-        className={buttonVariants({ variant: "outline", size: "lg", className: "mt-3 w-full" })}
-        onClick={() => void submit("google", { roleHint: admin ? "admin" : "customer", next })}
-      >
-        Continue with Google{features.mockAuth ? " — Demo" : ""}
-      </button>
-      {admin && features.mockAuth && (
-        <button
-          type="button"
-          disabled={pending}
-          className={buttonVariants({ variant: "secondary", size: "lg", className: "mt-3 w-full" })}
-          onClick={() => void submit("demo-continue", { role: "admin" })}
-        >
-          Continue as demo administrator
-        </button>
-      )}
       <p className="mt-4 text-sm">
         <Link href="/auth/forgot-password" className="text-[color:var(--brand-magenta)] underline">
           Forgot password?

@@ -1,61 +1,57 @@
 import { describe, expect, it } from "vitest";
 import { validateRuntimeMode, type RuntimeModeInput } from "@/lib/mode/validate";
 
-const demo: RuntimeModeInput = {
-  authProvider: "mock",
-  dataProvider: "snapshot",
+const supabaseAuth: RuntimeModeInput = {
+  authProvider: "supabase",
+  dataProvider: "supabase",
   paymentProvider: "disabled",
-  customerAuthEnabled: false,
-  mockAuthEnabled: true,
+  customerAuthEnabled: true,
+  mockAuthEnabled: false,
   stripeEnabledPublic: false,
+  supabaseUrl: "https://example.supabase.co",
+  supabaseAnonKey: "anon",
+  supabaseServiceRoleKey: "service",
   publicServiceRoleExposed: false,
   nodeEnv: "development",
 };
 
 describe("runtime mode validation", () => {
-  it("accepts the hosted demo combination", () => {
-    expect(validateRuntimeMode(demo)).toEqual([]);
+  it("accepts real Supabase authentication", () => {
+    expect(validateRuntimeMode(supabaseAuth)).toEqual([]);
+  });
+
+  it("rejects mock authentication", () => {
+    expect(
+      validateRuntimeMode({ ...supabaseAuth, authProvider: "mock", mockAuthEnabled: true, customerAuthEnabled: false }).join(" "),
+    ).toMatch(/Mock authentication has been removed/);
   });
 
   it("rejects Stripe without secrets", () => {
     const errors = validateRuntimeMode({
-      ...demo,
-      authProvider: "supabase",
-      dataProvider: "supabase",
+      ...supabaseAuth,
       paymentProvider: "stripe_test",
-      customerAuthEnabled: true,
-      mockAuthEnabled: false,
       stripeEnabledPublic: true,
-      supabaseUrl: "https://example.supabase.co",
-      supabaseAnonKey: "anon",
-      supabaseServiceRoleKey: "service",
     });
     expect(errors.some((e) => e.includes("Stripe requires"))).toBe(true);
   });
 
   it("rejects supabase data without credentials", () => {
     expect(
-      validateRuntimeMode({ ...demo, dataProvider: "supabase" }).join(" "),
+      validateRuntimeMode({
+        ...supabaseAuth,
+        supabaseUrl: undefined,
+        supabaseAnonKey: undefined,
+        supabaseServiceRoleKey: undefined,
+      }).join(" "),
     ).toMatch(/DATA_PROVIDER=supabase/);
-  });
-
-  it("rejects mock auth with live payments", () => {
-    expect(
-      validateRuntimeMode({ ...demo, paymentProvider: "stripe_live" }).join(" "),
-    ).toMatch(/Mock authentication/);
   });
 
   it("rejects live payments with snapshot data", () => {
     expect(
       validateRuntimeMode({
-        ...demo,
-        authProvider: "supabase",
-        customerAuthEnabled: true,
-        mockAuthEnabled: false,
+        ...supabaseAuth,
+        dataProvider: "snapshot",
         paymentProvider: "stripe_live",
-        supabaseUrl: "https://example.supabase.co",
-        supabaseAnonKey: "anon",
-        supabaseServiceRoleKey: "service",
         stripeSecretKey: "sk_live_x",
         stripeWebhookSecret: "whsec_x",
         stripePublishableKey: "pk_live_x",
@@ -65,7 +61,7 @@ describe("runtime mode validation", () => {
   });
 
   it("rejects a public service-role key", () => {
-    expect(validateRuntimeMode({ ...demo, publicServiceRoleExposed: true }).join(" ")).toMatch(
+    expect(validateRuntimeMode({ ...supabaseAuth, publicServiceRoleExposed: true }).join(" ")).toMatch(
       /NEXT_PUBLIC_/,
     );
   });

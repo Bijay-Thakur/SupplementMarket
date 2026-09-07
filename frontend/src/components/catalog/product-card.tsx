@@ -40,11 +40,6 @@ export function ProductCard({ product }: { product: ProductListItem }) {
           <AvailabilityBadge value={product.availability} />
           {product.on_sale && <Badge variant="sale">Sale</Badge>}
           {product.is_new && <Badge variant="new">New</Badge>}
-          {product.is_demo && (
-            <Badge variant="neutral" title="Demonstration data — not verified inventory">
-              Demo
-            </Badge>
-          )}
         </div>
         <PriceDisplay
           regularCents={product.regular_price_cents}

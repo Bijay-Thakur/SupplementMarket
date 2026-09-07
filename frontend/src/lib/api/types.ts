@@ -10,7 +10,7 @@ export type DietaryFlags = {
 };
 
 export type ProductListItem = {
-  id: number;
+  id: number | string;
   name: string;
   slug: string;
   brand_name: string;
@@ -41,8 +41,8 @@ export type ProductDetail = ProductListItem & {
   long_description: string | null;
   sku: string;
   upc: string | null;
-  brand_id?: number | null;
-  category_id?: number | null;
+  brand_id?: number | string | null;
+  category_id?: number | string | null;
   ingredient_highlights: string | null;
   usage_text: string | null;
   warnings: string | null;
@@ -73,7 +73,7 @@ export type FilterOptions = {
 };
 
 export type Brand = {
-  id: number;
+  id: number | string;
   name: string;
   slug: string;
   description: string | null;
@@ -87,10 +87,10 @@ export type Brand = {
 };
 
 export type Category = {
-  id: number;
+  id: number | string;
   name: string;
   slug: string;
-  parent_id: number | null;
+  parent_id: number | string | null;
   description: string | null;
   display_order: number;
 };
@@ -148,7 +148,7 @@ export type SuggestionItem = {
 };
 
 export type AdminProductRow = {
-  id: number;
+  id: number | string;
   name: string;
   slug: string;
   brand_name: string;
