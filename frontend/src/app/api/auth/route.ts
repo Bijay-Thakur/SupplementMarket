@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createCookieRecordingClient, jsonWithAuthCookies } from "@/lib/supabase/route";
-import { publicEnv } from "@/lib/env/public";
 import {
   ADMIN_FORBIDDEN_MESSAGE,
   AUTH_GENERIC_ERROR,
@@ -19,7 +18,7 @@ import { getAuthenticatedUser } from "@/lib/auth/server";
 import { resolvePasswordSignIn } from "@/lib/auth/password-sign-in";
 import { AuthHttpError } from "@/lib/auth/contract";
 import type { PendingAuthCookie } from "@/lib/supabase/cookies";
-import { assertSameOrigin } from "@/lib/auth/origin";
+import { assertSameOrigin, requestOrigin } from "@/lib/auth/origin";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +92,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "forbidden", detail: "Invalid request origin." }, { status: 403 });
   }
+  const siteUrl = requestOrigin(req);
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "sign-in";
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       const parsed = emailOnlySchema.safeParse(body);
       if (parsed.success) {
         await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-          redirectTo: `${publicEnv.siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`,
+          redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`,
         });
       }
       return reply(pending, { message: PASSWORD_RESET_GENERIC });
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         await supabase.auth.resend({
           type: "signup",
           email: parsed.data.email,
-          options: { emailRedirectTo: `${publicEnv.siteUrl}/auth/callback` },
+          options: { emailRedirectTo: `${siteUrl}/auth/callback` },
         });
       }
       return reply(pending, {
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
             username: parsed.data.username,
             full_name: parsed.data.fullName,
           },
-          emailRedirectTo: `${publicEnv.siteUrl}/auth/callback`,
+          emailRedirectTo: `${siteUrl}/auth/callback`,
         },
       });
       if (error) {
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
             {
               error: "auth",
               detail:
-                `Supabase rejected the confirmation redirect. Add ${publicEnv.siteUrl}/auth/callback to Authentication → URL Configuration → Redirect URLs.`,
+                `Supabase rejected the confirmation redirect. Add ${siteUrl}/auth/callback to Authentication → URL Configuration → Redirect URLs.`,
             },
             400,
           );

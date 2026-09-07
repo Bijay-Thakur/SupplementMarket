@@ -3,21 +3,21 @@ import { createCookieRecordingClient } from "@/lib/supabase/route";
 import { applyAuthCookies, redirectWithAuthCookies, type PendingAuthCookie } from "@/lib/supabase/cookies";
 import { resolvePasswordSignIn } from "@/lib/auth/password-sign-in";
 import { signInSchema, safeNextPath } from "@/lib/auth/schemas";
-import { assertSameOrigin } from "@/lib/auth/origin";
+import { assertSameOrigin, requestOrigin } from "@/lib/auth/origin";
 import {
   ADMIN_FORBIDDEN_MESSAGE,
   UNCONFIRMED_EMAIL_MESSAGE,
 } from "@/lib/auth/types";
-import { publicEnv } from "@/lib/env/public";
 
 export const dynamic = "force-dynamic";
 
 function errorRedirect(
   path: string,
   code: "auth" | "forbidden" | "unconfirmed" | "config",
+  baseUrl: string,
   pending: PendingAuthCookie[] = [],
 ) {
-  const dest = new URL(path, publicEnv.siteUrl);
+  const dest = new URL(path, baseUrl);
   dest.searchParams.set("error", code);
   const response = NextResponse.redirect(dest, 303);
   response.headers.set("Cache-Control", "private, no-store");
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       { status: 403, headers: { "Cache-Control": "private, no-store" } },
     );
   }
+  const baseUrl = requestOrigin(request);
   const form = await request.formData();
   const portal = form.get("portal") === "admin" ? "admin" : "customer";
   const loginPath = portal === "admin" ? "/admin/login" : "/auth/sign-in";
@@ -42,10 +43,10 @@ export async function POST(request: NextRequest) {
     portal,
     next: String(form.get("next") ?? ""),
   });
-  if (!parsed.success) return errorRedirect(loginPath, "auth");
+  if (!parsed.success) return errorRedirect(loginPath, "auth", baseUrl);
 
   const { supabase, pending } = createCookieRecordingClient(request);
-  if (!supabase) return errorRedirect(loginPath, "config");
+  if (!supabase) return errorRedirect(loginPath, "config", baseUrl);
 
   const result = await resolvePasswordSignIn({
     supabase,
@@ -55,13 +56,14 @@ export async function POST(request: NextRequest) {
     next: parsed.data.next,
   });
   if ("error" in result) {
-    if (result.error === UNCONFIRMED_EMAIL_MESSAGE) return errorRedirect(loginPath, "unconfirmed", pending);
-    if (result.error === ADMIN_FORBIDDEN_MESSAGE) return errorRedirect(loginPath, "forbidden", pending);
-    return errorRedirect(loginPath, "auth", pending);
+    if (result.error === UNCONFIRMED_EMAIL_MESSAGE) return errorRedirect(loginPath, "unconfirmed", baseUrl, pending);
+    if (result.error === ADMIN_FORBIDDEN_MESSAGE) return errorRedirect(loginPath, "forbidden", baseUrl, pending);
+    return errorRedirect(loginPath, "auth", baseUrl, pending);
   }
 
   return redirectWithAuthCookies(
     safeNextPath(result.redirectTo, portal === "admin" ? "/admin" : "/account"),
     pending,
+    baseUrl,
   );
 }

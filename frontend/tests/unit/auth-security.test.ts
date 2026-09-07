@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 import { signUpSchema, safeNextPath, isSafeNextPath, passwordSchema } from "@/lib/auth/schemas";
 import { validateSignUp, PASSWORD_RESET_GENERIC, AUTH_GENERIC_ERROR } from "@/lib/auth/types";
+import { assertSameOrigin, requestOrigin } from "@/lib/auth/origin";
 
 const authSql = readFileSync(
   path.join(process.cwd(), "../supabase/migrations/20260903043203_customer_and_admin_auth.sql"),
@@ -66,6 +68,31 @@ describe("open redirect rejection", () => {
     expect(isSafeNextPath("/admin")).toBe(true);
     expect(isSafeNextPath("/auth/reset-password")).toBe(true);
     expect(isSafeNextPath("/auth/callback")).toBe(false);
+  });
+});
+
+describe("same-origin request protection", () => {
+  it("uses the actual deployment origin instead of a build-time site URL", () => {
+    const sameOrigin = new NextRequest("https://supplement-market-snowy.vercel.app/api/auth/session", {
+      method: "POST",
+      headers: {
+        origin: "https://supplement-market-snowy.vercel.app",
+        host: "internal.local",
+        "x-forwarded-host": "supplement-market-snowy.vercel.app",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(requestOrigin(sameOrigin)).toBe("https://supplement-market-snowy.vercel.app");
+    expect(() => assertSameOrigin(sameOrigin)).not.toThrow();
+
+    const crossOrigin = new NextRequest("https://supplement-market-snowy.vercel.app/api/auth/session", {
+      method: "POST",
+      headers: {
+        origin: "https://attacker.example",
+        host: "supplement-market-snowy.vercel.app",
+      },
+    });
+    expect(() => assertSameOrigin(crossOrigin)).toThrow("origin");
   });
 });
 
