@@ -5,7 +5,7 @@ from pathlib import Path
 from app.catalog.csv_normalize import dollars_to_cents, normalize_upc, parse_size, parse_strength, sale_from_discount
 from app.catalog.csv_parse import parse_catalog_csv
 
-FIXTURE = Path(__file__).resolve().parents[2] / "docs" / "Vital Planet Order Form 9.2.26.csv"
+FIXTURE = Path(__file__).resolve().parents[3] / "docs" / "Vital Planet Order Form 9.2.26.csv"
 
 
 def test_vital_planet_order_form_counts() -> None:

@@ -1,0 +1,21 @@
+# Never upload local configuration or secret files.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local Python state is neither safe nor useful in a serverless deployment.
+backend/.venv/
+backend/**/*.db
+backend/storage/
+backend/tests/
+backend/alembic/
+**/__pycache__/
+**/*.py[cod]
+
+# Local test/build output.
+.next/
+coverage/
+test-results/
+playwright-report/
+.screenshots/

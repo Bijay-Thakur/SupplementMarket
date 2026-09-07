@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnvConfig } from "@next/env";
@@ -5,10 +6,17 @@ import type { NextConfig } from "next";
 
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendDir, "..");
+// Vercel may install this project as a standalone root or as the existing npm
+// workspace. Pick the smallest root that still contains the installed Next.js
+// package, so both layouts remain hermetic and build reliably.
+const localNext = path.join(frontendDir, "node_modules", "next", "package.json");
+const buildRoot = existsSync(localNext) ? frontendDir : repoRoot;
 // Next loads frontend/.env* before evaluating this config. Force the monorepo
 // root load so server-only values (notably SUPABASE_SERVICE_ROLE_KEY) are also
 // available without duplicating secrets into frontend/.env.local.
-loadEnvConfig(repoRoot, process.env.NODE_ENV !== "production", console, true);
+if (!process.env.VERCEL) {
+  loadEnvConfig(repoRoot, process.env.NODE_ENV !== "production", console, true);
+}
 
 function supabaseImagePatterns() {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,7 +54,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: repoRoot,
+  outputFileTracingRoot: buildRoot,
+  turbopack: {
+    root: buildRoot,
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

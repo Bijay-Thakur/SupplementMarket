@@ -65,14 +65,15 @@ google-services.json
 *.tsbuildinfo
 next-env.d.ts
 
-# python / local demo backend
+# python / local backend runtime
 __pycache__/
 *.py[cod]
-backend/.venv/
-backend/backend/
-backend/bnm_demo.db
-backend/*.db
-backend/storage/products/*
-!backend/storage/products/.gitkeep
-backend/storage/catalog-imports/*
-!backend/storage/catalog-imports/.gitkeep
+.venv/
+*.db
+# Legacy local-only runtime data retained after moving the source.
+/backend/
+frontend/backend/backend/
+frontend/backend/storage/products/*
+!frontend/backend/storage/products/.gitkeep
+frontend/backend/storage/catalog-imports/*
+!frontend/backend/storage/catalog-imports/.gitkeep

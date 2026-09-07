@@ -26,8 +26,8 @@ Collector User-Agent: `BronxvilleNaturalMarket-CatalogCollector/1.0`. Optional c
 
 ## Files
 
-- `backend/app/catalog/` — HTTP, robots, extractors, pricing, images, pipeline, CLI, adapters
-- `backend/app/api/routes_catalog_imports.py` — dev-only admin API
+- `frontend/backend/app/catalog/` — HTTP, robots, extractors, pricing, images, pipeline, CLI, adapters
+- `frontend/backend/app/api/routes_catalog_imports.py` — dev-only admin API
 - `/admin/catalog-imports*` — review UI
 - Alembic migration for staging tables + product provenance columns
 

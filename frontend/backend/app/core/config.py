@@ -6,13 +6,19 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# backend/app/core/config.py → repository root (one .env for the whole project)
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# The backend source is deployed below frontend; real deployment values come
+# from Vercel environment variables, while these files are local-only fallbacks.
+_FRONTEND_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(_REPO_ROOT / ".env", _REPO_ROOT / ".env.local"),
+        env_file=(
+            _REPO_ROOT / ".env",
+            _REPO_ROOT / "backend" / ".env",  # legacy local-only location
+            _FRONTEND_ROOT / ".env.local",
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )

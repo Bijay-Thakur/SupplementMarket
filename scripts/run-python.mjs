@@ -4,12 +4,21 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const backend = path.join(repoRoot, "backend");
-const venvPy =
+const backend = path.join(repoRoot, "frontend", "backend");
+const backendVenvPy =
   process.platform === "win32"
     ? path.join(backend, ".venv", "Scripts", "python.exe")
     : path.join(backend, ".venv", "bin", "python");
-const py = existsSync(venvPy) ? venvPy : "python";
+// Keep using an existing ignored virtualenv after relocating the source.
+const legacyVenvPy =
+  process.platform === "win32"
+    ? path.join(repoRoot, "backend", ".venv", "Scripts", "python.exe")
+    : path.join(repoRoot, "backend", ".venv", "bin", "python");
+const py = existsSync(backendVenvPy)
+  ? backendVenvPy
+  : existsSync(legacyVenvPy)
+    ? legacyVenvPy
+    : "python";
 
 const args = process.argv.slice(2);
 if (args.length === 0) {

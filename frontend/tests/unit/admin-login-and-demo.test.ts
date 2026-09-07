@@ -220,7 +220,7 @@ describe("entry preference is not authorization", () => {
     expect(server).not.toMatch(/bronxville-entry-mode/);
     expect(server).not.toMatch(/sessionStorage/);
     expect(server).not.toMatch(/localStorage/);
-    const fastapi = readFileSync(path.join(process.cwd(), "../backend/app/api/deps.py"), "utf8");
+    const fastapi = readFileSync(path.join(process.cwd(), "backend/app/api/deps.py"), "utf8");
     expect(fastapi).not.toMatch(/bronxville-entry-mode/);
     expect(fastapi).toMatch(/user_roles/);
   });

@@ -20,7 +20,7 @@ from app.db.base import SessionLocal
 from app.models import Product, ProductImage, StoreSettings
 from app.services import serialize
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 FRONTEND = ROOT / "frontend"
 PUBLIC_MEDIA = FRONTEND / "public" / "media" / "products"
 SNAPSHOT = FRONTEND / "src" / "data" / "catalog.json"

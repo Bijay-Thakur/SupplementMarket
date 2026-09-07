@@ -10,25 +10,45 @@ This is a **client demo**, not live inventory. Product photos come from official
 **Store:** 86 Pondfield Rd, Bronxville, NY 10708 · +1 (914) 779-3552 · bronxvillenatural@gmail.com  
 **Hours:** Monday–Saturday 9 AM–7 PM · Sunday 10 AM–6 PM
 
-## Live demo (Vercel)
+## Deploy to Vercel
 
-The storefront is a self-contained [Next.js](https://nextjs.org/) app in `frontend/`. No Python, Stripe, or Supabase keys are required.
+The storefront, Next.js server routes, and the authenticated FastAPI admin catalog service are self-contained in `frontend/`. They deploy as one Vercel project and one domain; do not create a separate backend project.
 
 1. Open [vercel.com/new](https://vercel.com/new)
 2. Import this GitHub repository: [Bijay-Thakur/SupplementMarket](https://github.com/Bijay-Thakur/SupplementMarket)
 3. Set **Root Directory** to `frontend`
-4. Leave environment variables empty
+4. Add the required environment variables listed below
 5. Click **Deploy**
 
-After the first deploy, optionally set `NEXT_PUBLIC_SITE_URL` to the Vercel domain (for example `https://your-app.vercel.app`).
+Required production variables (store the real values only in Vercel Project Settings, never in Git):
+
+```text
+NEXT_PUBLIC_SITE_URL=https://your-domain.example
+NEXT_PUBLIC_CUSTOMER_AUTH_ENABLED=true
+NEXT_PUBLIC_MOCK_AUTH_ENABLED=false
+NEXT_PUBLIC_DEMO_ROLE_SELECTOR_ENABLED=false
+AUTH_PROVIDER=supabase
+DATA_PROVIDER=supabase
+APP_ENV=production
+ENVIRONMENT=production
+FRONTEND_ORIGIN=https://your-domain.example
+NEXT_PUBLIC_SUPABASE_URL=<your Supabase project URL>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your publishable key>
+SUPABASE_SERVICE_ROLE_KEY=<your secret service-role key>
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. Never create a variable named `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`. Leave `FASTAPI_ORIGIN`, `NEXT_PUBLIC_API_URL`, and `USE_FASTAPI` unset on Vercel; the server automatically calls the same deployment's private `/api/backend` function.
+
+In Supabase Authentication URL Configuration, set the Site URL to the production domain and allow `https://your-domain.example/auth/callback` as a redirect URL. Add each Vercel preview callback only if you intend to test authentication on previews.
 
 | Surface | Path |
 | --- | --- |
 | Storefront | `/` |
 | Catalog | `/products` |
 | Admin | `/admin` |
+| Backend health | `/api/backend/health` |
 
-The first visit shows a Customer / Admin role chooser. That starts a **demo authentication session** (signed HttpOnly cookie). It is not a real account. Admin APIs reject requests without that cookie.
+Customer and administrator sessions use Supabase Auth cookies. Admin APIs verify the access token and then independently require `public.user_roles.role = 'admin'`; choosing an interface or changing browser storage does not grant access.
 
 Card payment is implemented behind `PAYMENT_PROVIDER=disabled`. Do not enter card numbers.
 
@@ -77,14 +97,14 @@ From `/admin` you can:
 
 Store settings include the owner-verified phone, email, address, and hours. Catalog prices remain demonstration pricing.
 
-Live manufacturer re-collection (`npm run catalog:collect`) needs the optional Python backend. The hosted demo already includes the imported official catalog.
+Live manufacturer re-collection (`npm run catalog:collect`) remains a local-only workflow. The deployed Python function exposes only the authenticated Supabase catalog-admin routes; local SQLite seed/reset and collector routes are not mounted in production.
 
 ## Stack
 
 - **App:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 in `frontend/`
-- **Hosted demo API:** Next.js Route Handlers + bundled `frontend/src/data/catalog.json` (works on Vercel)
-- **Optional collector:** FastAPI + SQLite in `backend/`, for robots-respecting manufacturer catalog imports
-- **Later launch:** set `AUTH_PROVIDER=supabase`, `DATA_PROVIDER=supabase`, and `PAYMENT_PROVIDER=stripe_test` or `stripe_live` after applying `supabase/migrations` and filling credentials. See `.env.example` and `docs/phase-3-auth-data-plan.md`.
+- **Hosted API:** Next.js Route Handlers plus a narrow FastAPI Vercel Function in `frontend/api/backend/`
+- **Backend source:** FastAPI, Supabase admin catalog service, and local SQLite collector in `frontend/backend/`
+- **Database/auth:** Supabase Auth, Postgres, Storage, and row-level security from `supabase/migrations/`
 
 ## Scripts
 
@@ -102,18 +122,19 @@ Live manufacturer re-collection (`npm run catalog:collect`) needs the optional P
 ## Project layout
 
 ```
-frontend/                  Next.js storefront + demo API
+frontend/                  Complete Vercel project root
+  api/backend/             FastAPI Vercel Function entrypoint
+  backend/                 Python backend source, migrations, and tests
   src/app/(public)/        Storefront routes
   src/app/(admin)/         Admin routes (no-index)
-  src/app/api/v1/          Bundled demo API for Vercel
+  src/app/api/             Next.js server routes
   src/components/          UI, catalog, cart, admin
   src/data/catalog.json    Bundled official catalog
   public/brand/            Store logo (source of truth)
   public/media/            Optimized product photos
-backend/                   Optional FastAPI collector
 .env.example               Single env template for both apps
 docs/                      Implementation notes
-supabase/                  Schema for a later persistent launch
+supabase/                  Database schema and RLS migrations
 ```
 
 ## Brand

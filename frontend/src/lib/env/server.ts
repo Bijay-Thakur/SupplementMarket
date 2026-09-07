@@ -40,6 +40,19 @@ if (!parsed.success) {
 
 const data = parsed.data;
 
+function fastapiOrigin() {
+  if (data.FASTAPI_ORIGIN) return data.FASTAPI_ORIGIN.replace(/\/$/, "");
+
+  // This platform-provided hostname supports both preview and production
+  // deployments without trusting a user-controlled Host header.
+  const vercelHost = (process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
+  if (vercelHost && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelHost)) {
+    return `https://${vercelHost}/api/backend`;
+  }
+
+  return "http://localhost:8000";
+}
+
 if (process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SECRET_KEY) {
   throw new Error("Supabase secret keys must never be prefixed with NEXT_PUBLIC_.");
 }
@@ -75,7 +88,7 @@ export const serverEnv = {
   isProduction: data.NODE_ENV === "production",
   appEnv: (data.APP_ENV || "development").toLowerCase(),
   adminInternalSecret: data.ADMIN_INTERNAL_SECRET || "",
-  fastapiOrigin: (data.FASTAPI_ORIGIN || "http://localhost:8000").replace(/\/$/, ""),
+  fastapiOrigin: fastapiOrigin(),
 } as const;
 
 export const supabaseServiceConfigured = Boolean(

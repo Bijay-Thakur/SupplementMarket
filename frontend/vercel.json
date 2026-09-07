@@ -1,3 +1,9 @@
 {
-  "framework": "nextjs"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "functions": {
+    "api/backend/index.py": {
+      "excludeFiles": "{backend/tests/**,backend/alembic/**,backend/storage/**,backend/.venv/**,backend/**/*.db,**/__pycache__/**,**/*.pyc}"
+    }
+  }
 }
