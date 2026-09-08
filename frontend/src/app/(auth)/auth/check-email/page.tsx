@@ -10,8 +10,9 @@ export default function CheckEmailPage() {
     <Container className="max-w-md py-12">
       <h1 className="font-display text-3xl font-semibold">Check your email</h1>
       <p className="mt-3 text-sm text-[color:var(--muted)]">
-        If a confirmation is required, open the link we sent to finish creating
-        your account. The link expires after a short time.
+        If this is a new account, open the confirmation link we sent to finish
+        creating it. For security, we show this same message when an account
+        already exists; in that case, no new email is sent.
       </p>
       <ResendConfirmationForm />
       <p className="mt-6 text-sm">

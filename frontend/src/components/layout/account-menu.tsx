@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { CircleUserRound } from "lucide-react";
 import { SignOutForm } from "@/components/auth/sign-out-form";
 
 export function AccountMenu({
@@ -43,9 +44,11 @@ export function AccountMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={menuId}
+        aria-label={compact ? undefined : "Account menu"}
+        title={compact ? undefined : "Account"}
         onClick={() => setOpen((value) => !value)}
       >
-        Account
+        {compact ? "Account" : <CircleUserRound className="h-6 w-6" aria-hidden />}
       </button>
       {open ? (
         <div

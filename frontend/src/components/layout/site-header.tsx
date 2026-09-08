@@ -41,7 +41,7 @@ export async function SiteHeader() {
         </div>
 
         <div className="ml-auto flex items-center gap-1 md:ml-2">
-          <CartLink />
+          {user ? <CartLink /> : null}
           <AuthNav />
           {guest ? (
             <div className="hidden lg:block">

@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { adminDashboard } from "@/lib/api/catalog";
 import { formatCents } from "@/lib/money";
 import { buttonVariants } from "@/components/ui/button";
-import { SampleCatalogNotice } from "@/components/catalog/sample-catalog-notice";
 
 export default function AdminDashboardPage() {
   const q = useQuery({ queryKey: ["admin-dash"], queryFn: adminDashboard });
@@ -16,7 +15,6 @@ export default function AdminDashboardPage() {
       <p className="mt-2 text-sm text-[color:var(--muted)]">
         Catalog and operations overview.
       </p>
-      <SampleCatalogNotice className="mt-2 max-w-2xl text-xs text-[color:var(--muted)]" />
       {q.isError && <p className="mt-4 text-[color:var(--danger)]">Could not load stats. Please refresh.</p>}
       {d && (
         <>

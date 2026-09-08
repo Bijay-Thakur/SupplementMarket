@@ -3,8 +3,10 @@
  * Display snapshots are advisory; checkout always revalidates server prices.
  */
 
-export const CART_STORAGE_KEY = "bnm-cart-v1";
-export const CART_VERSION = 1;
+// Version 2 starts every browser with a clean cart. The previous key may
+// contain legacy demo items from early builds of the storefront.
+export const CART_STORAGE_KEY = "bnm-cart-v2";
+export const CART_VERSION = 2;
 
 export type CartItem = {
   productId: number | string;

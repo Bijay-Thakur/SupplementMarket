@@ -8,7 +8,13 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { CartItem, CartState } from "@/lib/cart/storage";
-import { cartCount, cartSubtotalCents, loadCart, saveCart } from "@/lib/cart/storage";
+import {
+  CART_VERSION,
+  cartCount,
+  cartSubtotalCents,
+  loadCart,
+  saveCart,
+} from "@/lib/cart/storage";
 
 type CartContextValue = {
   items: CartItem[];
@@ -31,7 +37,7 @@ function subscribe(cb: () => void) {
   return () => listeners.delete(cb);
 }
 
-const EMPTY_CART: CartState = { version: 1, items: [] };
+const EMPTY_CART: CartState = { version: CART_VERSION, items: [] };
 let memory: CartState | null = null;
 
 function getSnapshot(): CartState {
@@ -58,7 +64,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             : i,
         )
       : [...current.items, { ...item, quantity: Math.min(99, qty) }];
-    persist({ version: 1, items });
+    persist({ version: CART_VERSION, items });
   }, []);
 
   const setQty = useCallback((productId: number | string, qty: number) => {
@@ -69,18 +75,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         : current.items.map((i) =>
             i.productId === productId ? { ...i, quantity: Math.min(99, qty) } : i,
           );
-    persist({ version: 1, items });
+    persist({ version: CART_VERSION, items });
   }, []);
 
   const remove = useCallback((productId: number | string) => {
     const current = loadCart();
     persist({
-      version: 1,
+      version: CART_VERSION,
       items: current.items.filter((i) => i.productId !== productId),
     });
   }, []);
 
-  const clear = useCallback(() => persist({ version: 1, items: [] }), []);
+  const clear = useCallback(() => persist({ version: CART_VERSION, items: [] }), []);
 
   const value = useMemo(
     () => ({

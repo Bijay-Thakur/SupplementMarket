@@ -56,12 +56,23 @@ export function AccountProfile({ user }: { user: AuthUser }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(form),
             });
-            const data = (await res.json()) as { detail?: string };
+            const data = (await res.json()) as {
+              detail?: string;
+              profile?: {
+                username: string;
+                fullName: string;
+                phone: string;
+                avatarUrl: string;
+              };
+            };
             if (!res.ok) {
               setError(data.detail || "Could not save profile.");
               return;
             }
-            setMessage("Profile saved.");
+            if (data.profile) {
+              setForm(data.profile);
+            }
+            setMessage("Profile saved to your account.");
             router.refresh();
           } catch {
             setError("The network request failed. Try again.");

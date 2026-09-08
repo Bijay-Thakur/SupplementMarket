@@ -65,10 +65,10 @@ test.describe("Supabase authentication", () => {
     }
 
     await page.goto("/");
-    await expect(page.getByRole("button", { name: /^Account$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Account menu$/i })).toBeVisible();
     await expect(page.getByRole("link", { name: "Admin Dashboard" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /view cart/i })).toBeVisible();
-    await page.getByRole("button", { name: /^Account$/i }).click();
+    await page.getByRole("button", { name: /^Account menu$/i }).click();
     await expect(page.getByRole("menuitem", { name: "My Account" })).toBeVisible();
     await page.getByRole("button", { name: /sign out/i }).click();
     await expect(page.getByRole("dialog", { name: /How would you like to continue/i })).toBeVisible({ timeout: 20_000 });

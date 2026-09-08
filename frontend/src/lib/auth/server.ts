@@ -105,9 +105,22 @@ function unauthenticatedRedirect(next?: string): never {
   redirect(`/auth/sign-in?next=${encodeURIComponent(dest)}`);
 }
 
+function authRequestContext(
+  input?: NextRequest | { kind?: AuthKind; next?: string },
+): { kind: AuthKind; next?: string } {
+  if (!input) return { kind: "page" };
+
+  // NextRequest can be bundled as a different class identity in route
+  // handlers, so instanceof alone is not a reliable API/page distinction.
+  const options = input as { kind?: AuthKind; next?: string };
+  if ("kind" in options || "next" in options) {
+    return { kind: options.kind ?? "page", next: options.next };
+  }
+  return { kind: "api" };
+}
+
 export async function requireUser(req?: NextRequest | { kind?: AuthKind; next?: string }): Promise<AuthUser> {
-  const kind: AuthKind = req instanceof NextRequest || !req ? (req instanceof NextRequest ? "api" : "page") : req.kind ?? "page";
-  const next = req instanceof NextRequest ? undefined : req?.next;
+  const { kind, next } = authRequestContext(req);
   const user = await getAuthenticatedUser();
   if (!user) {
     if (kind === "page") unauthenticatedRedirect(next);
@@ -117,8 +130,9 @@ export async function requireUser(req?: NextRequest | { kind?: AuthKind; next?: 
 }
 
 export async function requireAdmin(req?: NextRequest | { kind?: AuthKind; next?: string }): Promise<AuthUser> {
-  const kind: AuthKind = req instanceof NextRequest || !req ? (req instanceof NextRequest ? "api" : "page") : req.kind ?? "page";
-  const next = req instanceof NextRequest ? "/admin" : req?.next ?? "/admin";
+  const context = authRequestContext(req);
+  const kind = context.kind;
+  const next = context.next ?? "/admin";
   const user = await getAuthenticatedUser();
   if (!user) {
     if (kind === "page") redirect(`/admin/login?next=${encodeURIComponent(safeNextPath(next, "/admin"))}`);

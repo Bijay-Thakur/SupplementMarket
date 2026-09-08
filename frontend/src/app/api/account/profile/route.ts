@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest) {
         avatar_url: parsed.data.avatarUrl || null,
       })
       .eq("id", user.id)
-      .select("id")
+      .select("username, full_name, phone, avatar_url, updated_at")
       .maybeSingle();
     if (error) {
       if (error.code === "23505") {
@@ -58,7 +58,19 @@ export async function PATCH(req: NextRequest) {
         { status: 409, headers: { "Cache-Control": "private, no-store" } },
       );
     }
-    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(
+      {
+        ok: true,
+        profile: {
+          username: data.username ?? "",
+          fullName: data.full_name ?? "",
+          phone: data.phone ?? "",
+          avatarUrl: data.avatar_url ?? "",
+          updatedAt: data.updated_at,
+        },
+      },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (err) {
     return fail(err);
   }
