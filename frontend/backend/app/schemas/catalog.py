@@ -15,6 +15,7 @@ class BrandOut(BaseModel):
     logo_use_status: str = "permission_pending"
     logo_background: str = "cream"
     is_featured: bool = False
+    discount_percent: int | None = None
     display_order: int = 0
     is_demo: bool = False
 
@@ -27,6 +28,7 @@ class BrandCreate(BaseModel):
     official_website_url: str | None = None
     logo_use_status: str | None = None
     is_featured: bool = False
+    discount_percent: int | None = Field(default=None, ge=0, le=99)
 
 
 class BrandUpdate(BaseModel):
@@ -37,6 +39,7 @@ class BrandUpdate(BaseModel):
     official_website_url: str | None = None
     logo_use_status: str | None = None
     is_featured: bool | None = None
+    discount_percent: int | None = Field(default=None, ge=0, le=99)
     display_order: int | None = None
 
 

@@ -15,6 +15,7 @@ coverage/
 .screenshots/
 test-results/
 playwright-report/
+/outputs/
 .pytest_cache/
 .coverage
 htmlcov/

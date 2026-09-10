@@ -6,7 +6,7 @@
     "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev -w frontend",
+    "dev": "npm run dev:all",
     "dev:web": "npm run dev -w frontend",
     "dev:api": "node scripts/run-python.mjs -m uvicorn app.main:app --reload --port 8000",
     "dev:backend": "npm run dev:api",

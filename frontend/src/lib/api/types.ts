@@ -78,6 +78,7 @@ export type Brand = {
   slug: string;
   description: string | null;
   is_featured: boolean;
+  discount_percent?: number | null;
   logo_url?: string | null;
   logo_alt?: string | null;
   official_website_url?: string | null;

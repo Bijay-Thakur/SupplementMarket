@@ -36,3 +36,14 @@ def sale_price_from_percent(regular_cents: int, percent: int) -> int:
     if not (0 < percent < 100):
         raise PricingError("Discount percent must be between 1 and 99.")
     return round(regular_cents * (100 - percent) / 100)
+
+
+def sale_price_from_brand_discount(regular_cents: int, percent: int) -> int | None:
+    """Apply a brand rule; 0 removes Store SRP and 1..99 derives it from MSRP."""
+    if regular_cents < 0:
+        raise PricingError("Regular price cannot be negative.")
+    if not (0 <= percent < 100):
+        raise PricingError("Brand discount percent must be between 0 and 99.")
+    if percent == 0 or regular_cents == 0:
+        return None
+    return min(regular_cents - 1, round(regular_cents * (100 - percent) / 100))

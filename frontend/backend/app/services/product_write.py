@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.utils import slugify, utcnow
-from app.models import Product, Tag
+from app.models import Brand, Product, Tag
 from app.repositories import products as repo
 from app.schemas.product import ProductCreate, ProductUpdate
-from app.services.pricing import PricingError, sale_price_from_percent, validate_prices
+from app.services.pricing import (
+    PricingError,
+    sale_price_from_brand_discount,
+    sale_price_from_percent,
+    validate_prices,
+)
 
 _ALLOWED_SCALAR = (
     "short_description",
@@ -78,6 +83,9 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
 
     try:
         sale = _resolve_sale(payload.regular_price_cents, payload.sale_price_cents, payload.discount_percent)
+        brand = db.get(Brand, payload.brand_id)
+        if brand and brand.discount_percent is not None:
+            sale = sale_price_from_brand_discount(payload.regular_price_cents, brand.discount_percent)
         validate_prices(payload.regular_price_cents, sale)
     except PricingError as e:
         raise ValidationError(str(e), fields={"sale_price_cents": str(e)})
@@ -156,6 +164,9 @@ def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Prod
         new_sale = sale_price_from_percent(new_regular, payload.discount_percent)
     else:
         new_sale = product.sale_price_cents
+    brand = db.get(Brand, product.brand_id)
+    if brand and brand.discount_percent is not None:
+        new_sale = sale_price_from_brand_discount(new_regular, brand.discount_percent)
     try:
         validate_prices(new_regular, new_sale)
     except PricingError as e:

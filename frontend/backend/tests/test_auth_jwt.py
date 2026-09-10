@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import httpx
+
 from app.core.config import settings
 
 
@@ -68,3 +70,23 @@ def test_invalid_token_is_unauthorized(client, monkeypatch) -> None:
         json={"name": "Zinc", "brand_name": "NOW", "upc": "123", "regular_price_cents": 100},
     )
     assert r.status_code == 401
+
+
+def test_supabase_connection_failure_is_service_unavailable(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "next_public_supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "next_public_supabase_publishable_key", "publishable")
+
+    def fail_to_connect(*_args, **_kwargs):
+        raise httpx.ConnectError("connection blocked")
+
+    monkeypatch.setattr("app.api.deps.httpx.get", fail_to_connect)
+    response = client.get(
+        "/api/v1/admin/live/products",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "service_unavailable"
+    assert "Supabase" in body["detail"]
+    assert "traceback" not in str(body).lower()

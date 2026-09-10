@@ -22,6 +22,7 @@ from app.schemas.catalog import (
     TagUpdate,
 )
 from app.schemas.common import OkResponse
+from app.services.pricing import sale_price_from_brand_discount
 
 public = APIRouter(tags=["catalog"])
 admin = APIRouter(dependencies=[Depends(require_dev)], tags=["admin:catalog"])
@@ -68,6 +69,7 @@ def create_brand(payload: BrandCreate, db: Session = Depends(get_db)):
         description=payload.description,
         logo_url=payload.logo_url,
         is_featured=payload.is_featured,
+        discount_percent=payload.discount_percent,
     )
     db.add(brand)
     db.commit()
@@ -84,9 +86,15 @@ def update_brand(brand_id: int, payload: BrandUpdate, db: Session = Depends(get_
     if "name" in data and data["name"]:
         brand.name = data["name"]
         brand.slug = _unique_slug(db, Brand, slugify(data["name"]), exclude_id=brand_id)
-    for f in ("description", "logo_url", "logo_alt", "official_website_url", "logo_use_status", "is_featured", "display_order"):
+    for f in ("description", "logo_url", "logo_alt", "official_website_url", "logo_use_status", "is_featured", "display_order", "discount_percent"):
         if f in data:
             setattr(brand, f, data[f])
+    if "discount_percent" in data and data["discount_percent"] is not None:
+        for product in brand.products:
+            product.sale_price_cents = sale_price_from_brand_discount(
+                product.regular_price_cents,
+                data["discount_percent"],
+            )
     db.commit()
     db.refresh(brand)
     return brand

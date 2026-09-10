@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/admin/products", label: "Products" },
   { href: "/admin/products/new", label: "Add Product" },
   { href: "/admin/products/import", label: "CSV Import" },
-  { href: "/admin/taxonomy", label: "Brands" },
+  { href: "/admin/brands", label: "Brands" },
   { href: "/admin/taxonomy", label: "Categories" },
   { href: "/admin/promotions", label: "Sales and Pricing" },
   { href: "/admin/products/imports", label: "Import History" },

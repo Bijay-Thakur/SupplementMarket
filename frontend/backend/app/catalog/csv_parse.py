@@ -27,9 +27,11 @@ MAX_CSV_BYTES = 10 * 1024 * 1024
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "upc": ("upc", "upc code", "barcode", "gtin", "12 digit"),
     "sku": ("sku", "product code"),
-    "supplier_sku": ("supplier sku", "item #", "item number", "item no", "item"),
+    "supplier_sku": ("supplier sku", "supplier_sku", "item #", "item number", "item no", "item"),
     "name": (
         "product name",
+        "product full name",
+        "product_full_name",
         "product description",
         "item description",
         "description",
@@ -39,11 +41,20 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "size": ("size", "package size"),
     "form": ("form", "dosage form"),
     "strength": ("strength", "potency"),
-    "regular_price": ("msrp", "regular price", "retail price"),
-    "sale_price": ("sale price", "selling price", "discounted price"),
-    "cost_price": ("wholesale price", "wholesale", "cost", "unit cost"),
-    "discount": ("discount", "discount percent"),
-    "image": ("image", "image url", "product image", "photo url"),
+    "regular_price": ("msrp", "regular price", "regular_price", "retail price"),
+    "sale_price": ("sale price", "selling price", "discounted price", "store srp", "store_srp"),
+    "cost_price": ("wholesale price", "wholesale", "cost", "cost_price", "unit cost"),
+    "discount": ("discount", "discount percent", "discount_percent"),
+    "availability": ("availability", "stock status", "inventory status"),
+    "image": ("image", "image url", "image_url", "product image", "photo url"),
+}
+
+ALLOWED_AVAILABILITY = {
+    "in_stock",
+    "low_stock",
+    "out_of_stock",
+    "special_order",
+    "discontinued",
 }
 
 FOOTER_MARKERS = (
@@ -106,6 +117,7 @@ class ParsedRow:
     cost_price_cents: int | None = None
     sale_price_cents: int | None = None
     discount_percent: int | None = None
+    availability: str = "in_stock"
     image_url: str | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -122,9 +134,21 @@ def sha256_bytes(content: bytes) -> str:
 def _decode_csv_bytes(content: bytes) -> str:
     if len(content) > MAX_CSV_BYTES:
         raise ValueError("CSV exceeds the 10 MB limit.")
-    if content.startswith(b"\xef\xbb\xbf"):
+    if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return content.decode("utf-16")
+        except UnicodeDecodeError as exc:
+            raise ValueError("The CSV uses an unsupported text encoding.") from exc
+    try:
         return content.decode("utf-8-sig")
-    return content.decode("utf-8")
+    except UnicodeDecodeError:
+        # Excel on Windows commonly exports CSV files as Windows-1252.
+        try:
+            return content.decode("cp1252")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                "The CSV could not be read. Save it as UTF-8 CSV and upload it again."
+            ) from exc
 
 
 def _detect_delimiter(sample: str) -> str:
@@ -237,6 +261,7 @@ def parse_product_row(
             "sale_price",
             "cost_price",
             "discount",
+            "availability",
             "image",
         )
     }
@@ -252,6 +277,14 @@ def parse_product_row(
         size_original=trim(raw["size"]) or None,
         image_url=trim(raw["image"]) or None,
     )
+    availability = trim(raw["availability"]).lower().replace(" ", "_").replace("-", "_")
+    if availability:
+        if availability in ALLOWED_AVAILABILITY:
+            row.availability = availability
+        else:
+            row.errors.append(
+                "Availability must be in_stock, low_stock, out_of_stock, special_order, or discontinued."
+            )
     upc, upc_warnings = normalize_upc(raw["upc"])
     row.upc = upc
     row.warnings.extend(upc_warnings)
@@ -295,8 +328,6 @@ def parse_product_row(
         row.errors.append("Regular price is required.")
     if not row.name:
         row.errors.append("Product name is required.")
-    if not row.supplier_sku and not row.sku and not row.upc:
-        row.errors.append("Each product needs a UPC, SKU, or supplier SKU.")
     if not row.brand:
         row.errors.append("Brand is required.")
     return row
@@ -311,7 +342,10 @@ def parse_catalog_csv(
 ) -> dict[str, Any]:
     text = _decode_csv_bytes(content)
     delimiter = _detect_delimiter(text)
-    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    try:
+        all_rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+    except csv.Error as exc:
+        raise ValueError(f"The CSV is malformed: {exc}.") from exc
     mapping: dict[str, DetectedColumn] = {}
     header_cells: list[str] = []
     current_category: str | None = None
@@ -320,35 +354,66 @@ def parse_catalog_csv(
     skipped = 0
     detected_brand = default_brand
 
-    for index, cells in enumerate(reader, start=1):
+    recognized_header_index = next(
+        (index for index, cells in enumerate(all_rows) if _looks_like_header(cells)),
+        None,
+    )
+    if recognized_header_index is None:
+        recognized_header_index = next(
+            (
+                index
+                for index, cells in enumerate(all_rows)
+                if len(_nonempty_cells(cells)) >= 2 and not _is_footer(cells)
+            ),
+            None,
+        )
+
+    if recognized_header_index is not None:
+        header_cells = [trim(c) for c in all_rows[recognized_header_index]]
+        mapping = map_headers(header_cells)
+        if column_overrides:
+            for field, idx in column_overrides.items():
+                if 0 <= idx < len(header_cells):
+                    mapping[field] = DetectedColumn(
+                        field,
+                        header_cells[idx].strip() or field,
+                        idx,
+                    )
+
+    for cells in all_rows[: recognized_header_index or 0]:
+        joined = " ".join(_nonempty_cells(cells[:8])).lower()
+        if "vital planet" in joined:
+            detected_brand = detected_brand or "Vital Planet"
+
+    start_index = (recognized_header_index + 1) if recognized_header_index is not None else 0
+    skipped += start_index
+    for zero_index, cells in enumerate(all_rows[start_index:], start=start_index):
+        index = zero_index + 1
         if not _nonempty_cells(cells):
             skipped += 1
             continue
-        if _looks_like_header(cells):
-            mapping = map_headers(cells)
-            header_cells = [trim(c) for c in cells]
-            if column_overrides:
-                for field, idx in column_overrides.items():
-                    if 0 <= idx < len(cells):
-                        mapping[field] = DetectedColumn(field, cells[idx].strip() or field, idx)
-            continue
-        joined = " ".join(_nonempty_cells(cells[:8])).lower()
-        if "vital planet" in joined and not mapping:
-            detected_brand = detected_brand or "Vital Planet"
         if not mapping:
+            skipped += 1
+            continue
+        if _looks_like_header(cells):
             skipped += 1
             continue
         if _is_footer(cells):
             skipped += 1
             continue
-        supplier = _cell(cells, mapping, "supplier_sku")
         name = _cell(cells, mapping, "name")
-        sku = _cell(cells, mapping, "sku")
-        upc = _cell(cells, mapping, "upc")
-        if "supplier_sku" in mapping:
-            is_product = bool(supplier and name)
-        else:
-            is_product = bool(name and (sku or upc or supplier))
+        if (
+            name
+            and detected_brand
+            and slugify(name) == slugify(detected_brand)
+            and not _cell(cells, mapping, "regular_price")
+        ):
+            skipped += 1
+            continue
+        # Product name is the only row-level signal required. Identifiers and
+        # all descriptive fields may be blank; duplicate checks fall back to
+        # brand + product name when no identifier is provided.
+        is_product = bool(name)
         if is_product:
             products.append(
                 parse_product_row(

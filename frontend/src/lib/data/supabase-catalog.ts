@@ -230,13 +230,14 @@ export async function filters(): Promise<FilterOptions> {
 export async function listBrands(): Promise<Brand[]> {
   const client = getSupabaseAdminClient();
   if (!client) return [];
-  const { data } = await client.from("brands").select("id,name,slug,description,is_featured,display_order").eq("is_active", true);
+  const { data } = await client.from("brands").select("id,name,slug,description,is_featured,display_order,discount_percent").eq("is_active", true);
   return (data ?? []).map((b) => ({
     id: String(b.id),
     name: String(b.name ?? ""),
     slug: String(b.slug ?? ""),
     description: (b.description as string | null) ?? null,
     is_featured: Boolean(b.is_featured),
+    discount_percent: b.discount_percent == null ? null : Number(b.discount_percent),
   }));
 }
 

@@ -68,6 +68,12 @@ class TimestampMixin:
 
 class Brand(TimestampMixin, Base):
     __tablename__ = "brands"
+    __table_args__ = (
+        CheckConstraint(
+            "discount_percent IS NULL OR (discount_percent >= 0 AND discount_percent < 100)",
+            name="ck_brand_discount_percent_range",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
@@ -79,6 +85,7 @@ class Brand(TimestampMixin, Base):
     logo_use_status: Mapped[str] = mapped_column(String(40), default="permission_pending", nullable=False)
     logo_background: Mapped[str] = mapped_column(String(40), default="cream", nullable=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    discount_percent: Mapped[int | None] = mapped_column(Integer)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

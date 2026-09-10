@@ -43,7 +43,7 @@ def _ensure_schema_and_demo() -> None:
     from app.db.schema_patch import patch_sqlite
 
     patch_sqlite(engine)
-    if not settings.is_development:
+    if not settings.is_development or not settings.seed_demo_data:
         return
     db = SessionLocal()
     try:

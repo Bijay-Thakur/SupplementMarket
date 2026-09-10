@@ -179,16 +179,22 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       if (getDataProvider() === "supabase") return json(await supabaseDashboard());
       return json(dashboard());
     }
+    if (key === "admin/brands") {
+      if (getDataProvider() === "supabase") return json(await fastapiAdmin("/brands"));
+      return json(await Promise.resolve(repo.listBrands()));
+    }
     if (key === "admin/products") return json(listProducts(productQuery(sp), true));
     if (path[0] === "admin" && path[1] === "products" && path.length === 3 && path[2] !== "bulk-import") {
       return json(getProductById(Number(path[2])));
     }
     if (key === "admin/products/bulk-import/template") {
-      return new NextResponse(CSV_TEMPLATE, {
+      return new NextResponse(`\uFEFF${CSV_TEMPLATE}`, {
         status: 200,
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": "attachment; filename=bnm-import-template.csv",
+          "Content-Disposition": 'attachment; filename="bronxville-product-import-template.csv"',
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     }
@@ -293,6 +299,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return json(commitCsv(text));
     }
     if (key === "admin/brands") {
+      if (getDataProvider() === "supabase") {
+        const created = await fastapiAdmin("/brands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(await readJson(req)),
+        });
+        revalidateStorefront();
+        return json(created, 201);
+      }
       const created = createBrand((await readJson(req)) as { name: string });
       await audit(req, "brand.create", "brand", created.id, `Created brand ${created.name}`);
       return json(created, 201);
@@ -354,6 +369,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     if (path[0] === "admin" && path[1] === "brands" && path.length === 3) {
       await requireAdmin(req);
+      if (getDataProvider() === "supabase") {
+        const updated = await fastapiAdmin(`/brands/${path[2]}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        revalidateStorefront();
+        return json(updated);
+      }
       const updated = updateBrand(Number(path[2]), body);
       await audit(req, "brand.update", "brand", updated.id, `Updated brand ${updated.name}`);
       return json(updated);

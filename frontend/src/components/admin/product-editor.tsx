@@ -75,7 +75,7 @@ export function ProductEditor({ productId }: Props) {
     warnings:
       "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
     tag_ids: [] as number[],
-    is_demo: true,
+    is_demo: false,
   });
 
   useEffect(() => {

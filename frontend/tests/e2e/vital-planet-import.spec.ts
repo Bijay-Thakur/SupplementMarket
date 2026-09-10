@@ -20,7 +20,7 @@ loadRootEnv();
 const csvPath = path.resolve(__dirname, "../../../docs/Vital Planet Order Form 9.2.26.csv");
 
 test.describe("Vital Planet CSV import", () => {
-  test("imports the order form, shows a storefront product, and stays idempotent", async ({ page }) => {
+  test("imports the order form, shows a storefront product, and blocks unapproved duplicate updates", async ({ page }) => {
     test.skip(
       process.env.DATA_PROVIDER !== "supabase" || !process.env.E2E_ADMIN_EMAIL || !process.env.E2E_ADMIN_PASSWORD,
       "Requires DATA_PROVIDER=supabase and E2E_ADMIN_EMAIL/E2E_ADMIN_PASSWORD.",
@@ -37,13 +37,13 @@ test.describe("Vital Planet CSV import", () => {
     await page.goto("/admin/products/import");
     await expect(page.getByRole("heading", { name: /Import products/i })).toBeVisible();
     await page.locator("input[type=file]").setInputFiles(csvPath);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Analyze CSV" }).click();
     await expect(page.getByText(/Column mapping/i)).toBeVisible({ timeout: 30_000 });
-    await page.getByLabel("Brand").fill("Vital Planet");
+    await page.getByLabel(/Default brand/).fill("Vital Planet");
     await page.getByLabel("Default discount").selectOption("20");
-    await page.getByRole("button", { name: /Preview import/i }).click();
+    await page.getByRole("button", { name: /Generate review/i }).click();
     await expect(page.getByText(/total detected/i)).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: /Confirm import/i }).click();
+    await page.getByRole("button", { name: /Approve and import/i }).click();
     await expect(page.getByText(/Inserted/i)).toBeVisible({ timeout: 60_000 });
 
     await page.goto("/admin/products");
@@ -55,10 +55,11 @@ test.describe("Vital Planet CSV import", () => {
 
     await page.goto("/admin/products/import");
     await page.locator("input[type=file]").setInputFiles(csvPath);
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("button", { name: /Preview import/i }).click();
+    await page.getByRole("button", { name: "Analyze CSV" }).click();
+    await page.getByRole("button", { name: /Generate review/i }).click();
     await expect(page.getByText(/imported before/i)).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: /Confirm import/i }).click();
-    await expect(page.getByText(/Inserted 0|unchanged/i)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/existing products are blocked/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Approve existing-product update/i }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Approve and import/i })).toBeDisabled();
   });
 });

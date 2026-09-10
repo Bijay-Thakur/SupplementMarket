@@ -18,6 +18,101 @@ from app.services import supabase_rest as sb
 router = APIRouter(prefix="/admin/live", tags=["admin-catalog"], dependencies=[Depends(require_supabase_admin)])
 
 
+def _brand_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "slug": row["slug"],
+        "description": row.get("description"),
+        "is_featured": bool(row.get("is_featured")),
+        "discount_percent": row.get("discount_percent"),
+        "display_order": int(row.get("display_order") or 0),
+    }
+
+
+def _discount_percent(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 99:
+        raise ValidationError(
+            "Discount percent must be a whole number from 0 to 99.",
+            fields={"discount_percent": "Use a whole number from 0 to 99."},
+        )
+    return value
+
+
+def _unique_brand_slug(name: str, current_id: str | None = None) -> str:
+    base = slugify(name)
+    candidate = base
+    suffix = 2
+    while True:
+        matches = sb.select(
+            "brands",
+            {"select": "id", "slug": f"eq.{candidate}", "limit": "1"},
+        )
+        if not matches or (current_id and str(matches[0]["id"]) == current_id):
+            return candidate
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+
+
+@router.get("/brands")
+def list_brands():
+    rows = sb.select(
+        "brands",
+        {
+            "select": "id,name,slug,description,is_featured,is_active,display_order,discount_percent",
+            "order": "name.asc",
+        },
+    )
+    return [_brand_payload(row) for row in rows if row.get("is_active", True)]
+
+
+@router.post("/brands", status_code=201)
+def create_brand(body: dict[str, Any]):
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise ValidationError("Brand name is required.", fields={"name": "Required"})
+    discount = _discount_percent(body.get("discount_percent"))
+    row = sb.insert(
+        "brands",
+        {
+            "name": name,
+            "slug": _unique_brand_slug(name),
+            "description": body.get("description"),
+            "is_featured": bool(body.get("is_featured")),
+            "discount_percent": discount,
+        },
+    )
+    return _brand_payload(row)
+
+
+@router.patch("/brands/{brand_id}")
+def patch_brand(brand_id: str, body: dict[str, Any]):
+    rows = sb.select("brands", {"select": "*", "id": f"eq.{brand_id}", "limit": "1"})
+    if not rows:
+        raise NotFoundError("Brand not found.")
+    patch: dict[str, Any] = {}
+    if "name" in body:
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Brand name is required.", fields={"name": "Required"})
+        patch["name"] = name
+        patch["slug"] = _unique_brand_slug(name, brand_id)
+    if "description" in body:
+        patch["description"] = body.get("description")
+    if "is_featured" in body:
+        patch["is_featured"] = bool(body.get("is_featured"))
+    if "display_order" in body:
+        patch["display_order"] = int(body.get("display_order") or 0)
+    if "discount_percent" in body:
+        patch["discount_percent"] = _discount_percent(body.get("discount_percent"))
+    updated = sb.update("brands", {"id": f"eq.{brand_id}"}, patch) if patch else rows[0]
+    if not updated:
+        raise NotFoundError("Brand not found.")
+    return _brand_payload(updated)
+
+
 def _public_product(row: dict[str, Any], *, include_cost: bool) -> dict[str, Any]:
     variant = (row.get("product_variants") or [None])[0] or {}
     brand = row.get("brands") or {}
@@ -114,6 +209,30 @@ def commit(batch_id: str, body: dict[str, Any], request: Request):
         included_row_numbers=included,
         force_reprocess=bool(body.get("force_reprocess")),
     )
+
+
+@router.patch("/catalog-imports/{batch_id}/rows/{source_row_number}")
+def patch_import_row(
+    batch_id: str,
+    source_row_number: int,
+    body: dict[str, Any],
+    request: Request,
+):
+    origin = request.headers.get("origin")
+    if origin and origin != settings.frontend_origin:
+        raise ForbiddenError("Invalid request origin.")
+    return catalog_import.update_preview_row(batch_id, source_row_number, body)
+
+
+@router.patch("/catalog-imports/{batch_id}/selection")
+def patch_import_selection(batch_id: str, body: dict[str, Any], request: Request):
+    origin = request.headers.get("origin")
+    if origin and origin != settings.frontend_origin:
+        raise ForbiddenError("Invalid request origin.")
+    included = body.get("included_row_numbers")
+    if not isinstance(included, list) or any(not isinstance(value, int) for value in included):
+        raise ValidationError("included_row_numbers must be a list of CSV row numbers.")
+    return catalog_import.update_preview_selection(batch_id, included)
 
 
 @router.get("/catalog-imports")

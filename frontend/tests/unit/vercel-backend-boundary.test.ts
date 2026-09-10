@@ -24,6 +24,16 @@ describe("Vercel backend boundary", () => {
     expect(proxy).not.toContain("supabaseServiceRoleKey");
   });
 
+  it("uses the same-deployment Python function instead of a local port on Vercel", () => {
+    const serverEnv = read("src/lib/env/server.ts");
+    const vercelOrigin = serverEnv.indexOf("const vercelHost");
+    const configuredOrigin = serverEnv.indexOf("if (data.FASTAPI_ORIGIN)");
+
+    expect(vercelOrigin).toBeGreaterThan(-1);
+    expect(configuredOrigin).toBeGreaterThan(vercelOrigin);
+    expect(serverEnv).toContain("https://${vercelHost}/api/backend");
+  });
+
   it("excludes local secrets, databases, tests, and storage", () => {
     const ignore = read(".vercelignore");
     expect(ignore).toMatch(/^\.env$/m);

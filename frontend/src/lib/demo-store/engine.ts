@@ -16,7 +16,7 @@ import type {
   SuggestionItem,
   Tag,
 } from "@/lib/api/types";
-import { discountPercent, effectivePriceCents } from "@/lib/money";
+import { discountPercent, effectivePriceCents, saleFromPercent } from "@/lib/money";
 import { documentFromProduct, searchDocuments } from "@/lib/search/catalog-search";
 
 const DIETARY_KEYS = [
@@ -223,6 +223,7 @@ function normalizeBrand(b: Brand): Brand {
     logo_use_status: b.logo_use_status ?? "permission_pending",
     logo_background: b.logo_background ?? "cream",
     display_order: b.display_order ?? 0,
+    discount_percent: b.discount_percent ?? null,
   };
 }
 
@@ -441,7 +442,14 @@ export function createBrand(body: {
   logo_alt?: string | null;
   official_website_url?: string | null;
   logo_use_status?: string | null;
+  discount_percent?: number | null;
 }) {
+  if (
+    body.discount_percent != null &&
+    (!Number.isInteger(body.discount_percent) || body.discount_percent < 0 || body.discount_percent > 99)
+  ) {
+    throw new ApiHttpError(400, "Discount percent must be between 0 and 99.", "validation");
+  }
   const store = getStore();
   const base = slugify(body.name);
   let slug = base;
@@ -461,6 +469,7 @@ export function createBrand(body: {
     official_website_url: body.official_website_url ?? null,
     logo_use_status: body.logo_use_status ?? "permission_pending",
     display_order: store.brands.length,
+    discount_percent: body.discount_percent ?? null,
   });
   store.brands.push(brand);
   return brand;
@@ -477,6 +486,22 @@ export function updateBrand(id: number, body: Record<string, unknown>) {
   if ("official_website_url" in body) brand.official_website_url = (body.official_website_url as string) || null;
   if ("logo_use_status" in body) brand.logo_use_status = String(body.logo_use_status ?? "permission_pending");
   if (typeof body.display_order === "number") brand.display_order = body.display_order;
+  if (typeof body.discount_percent === "number") {
+    const percent = Math.trunc(body.discount_percent);
+    if (percent < 0 || percent > 99) {
+      throw new ApiHttpError(400, "Discount percent must be between 0 and 99.", "validation");
+    }
+    brand.discount_percent = percent;
+    for (const product of getStore().products.filter((p) => p.brand_slug === brand.slug)) {
+      product.sale_price_cents = percent === 0 || product.regular_price_cents === 0
+        ? null
+        : Math.min(
+            product.regular_price_cents - 1,
+            saleFromPercent(product.regular_price_cents, percent),
+          );
+      refreshPricing(product);
+    }
+  }
   return normalizeBrand(brand);
 }
 
@@ -935,8 +960,7 @@ export function getCatalogImport(runId: string) {
   return run;
 }
 
-export const CSV_TEMPLATE = `name,brand,category,sku,upc,form,size,count,strength_value,strength_unit,regular_price,sale_price,availability,short_description,vegan,vegetarian,organic,gluten_free,soy_free,dairy_free,alcohol_free,non_gmo,search_aliases,wellness_tags,ingredient_highlights,source_url,source_type
-Demo Vitamin D3 2000 IU,Demo Brand Co,Vitamin D,DEMO-D3-2000,,softgel,,120,2000,IU,18.99,,in_stock,Demo row for template only,,,,,,,,yes,,,vitamin d,demo,https://example.com,synthetic_demo
+export const CSV_TEMPLATE = `product_full_name,brand,category,sku,supplier_sku,upc,msrp,store_srp,cost_price,availability,size,form,strength,image_url
 `;
 
 function parseCsv(text: string): string[][] {

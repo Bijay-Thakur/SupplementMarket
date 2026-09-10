@@ -61,6 +61,10 @@ export function listBrands() {
   return apiFetch<Brand[]>("/api/v1/brands");
 }
 
+export function adminListBrands() {
+  return apiFetch<Brand[]>("/api/v1/admin/brands");
+}
+
 export function listCategories() {
   return apiFetch<Category[]>("/api/v1/categories");
 }
@@ -191,7 +195,7 @@ export function createBrand(body: unknown) {
   });
 }
 
-export function adminUpdateBrand(id: number, body: unknown) {
+export function adminUpdateBrand(id: number | string, body: unknown) {
   return apiFetch<Brand>(`/api/v1/admin/brands/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),

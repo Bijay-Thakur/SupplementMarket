@@ -8,7 +8,12 @@ from fastapi import Request
 
 from app.core import ratelimit
 from app.core.config import settings
-from app.core.errors import ForbiddenError, UnauthorizedError, ValidationError
+from app.core.errors import (
+    ForbiddenError,
+    ServiceUnavailableError,
+    UnauthorizedError,
+    ValidationError,
+)
 
 
 def require_dev() -> None:
@@ -53,19 +58,34 @@ def _bearer_token(request: Request) -> str:
 def _verify_access_token(token: str) -> dict:
     if not settings.supabase_auth_configured:
         raise ValidationError("Supabase is not configured.")
-    response = httpx.get(
-        f"{settings.supabase_rest_url}/auth/v1/user",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "apikey": settings.supabase_publishable_key,
-        },
-        timeout=10.0,
-    )
+    try:
+        response = httpx.get(
+            f"{settings.supabase_rest_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": settings.supabase_publishable_key,
+            },
+            timeout=10.0,
+        )
+    except httpx.RequestError as exc:
+        raise ServiceUnavailableError(
+            "Unable to reach Supabase to verify administrator access. "
+            "Check the network connection and Supabase configuration, then try again."
+        ) from exc
     if response.status_code == 401 or response.status_code == 403:
         raise UnauthorizedError("Sign in is required.")
+    if response.status_code >= 500:
+        raise ServiceUnavailableError(
+            "Supabase authentication is temporarily unavailable. Please try again."
+        )
     if response.status_code >= 400:
         raise UnauthorizedError("Sign in is required.")
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ServiceUnavailableError(
+            "Supabase returned an invalid authentication response. Please try again."
+        ) from exc
     if not isinstance(data, dict) or not data.get("id"):
         raise UnauthorizedError("Sign in is required.")
     return data
@@ -77,15 +97,30 @@ def _role_for_user(user_id: str, access_token: str) -> str | None:
         "apikey": settings.supabase_publishable_key,
         "Accept": "application/json",
     }
-    response = httpx.get(
-        f"{settings.supabase_rest_url}/rest/v1/user_roles",
-        headers=headers,
-        params={"user_id": f"eq.{user_id}", "select": "role"},
-        timeout=10.0,
-    )
+    try:
+        response = httpx.get(
+            f"{settings.supabase_rest_url}/rest/v1/user_roles",
+            headers=headers,
+            params={"user_id": f"eq.{user_id}", "select": "role"},
+            timeout=10.0,
+        )
+    except httpx.RequestError as exc:
+        raise ServiceUnavailableError(
+            "Unable to reach Supabase to verify the administrator role. "
+            "Check the network connection and try again."
+        ) from exc
+    if response.status_code >= 500:
+        raise ServiceUnavailableError(
+            "Supabase role verification is temporarily unavailable. Please try again."
+        )
     if response.status_code >= 400:
         return None
-    rows = response.json()
+    try:
+        rows = response.json()
+    except ValueError as exc:
+        raise ServiceUnavailableError(
+            "Supabase returned an invalid role response. Please try again."
+        ) from exc
     if isinstance(rows, list) and rows:
         role = rows[0].get("role")
         return str(role) if role else None

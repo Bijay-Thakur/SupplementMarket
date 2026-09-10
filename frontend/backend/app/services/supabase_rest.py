@@ -19,6 +19,12 @@ class SupabaseRestError(AppError):
     code = "upstream_error"
 
 
+# Reuse TLS connections across the many small catalog requests made by an
+# import. Creating a new client for every request made CSV previews slow enough
+# to hit serverless request limits for otherwise small files.
+_CLIENT = httpx.Client(limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
+
+
 def _headers(*, prefer: str | None = None) -> dict[str, str]:
     if not settings.supabase_configured:
         raise ValidationError("Supabase is not configured.")
@@ -45,7 +51,7 @@ def request(
     prefer: str | None = "return=representation",
     timeout: float = 30.0,
 ) -> Any:
-    response = httpx.request(
+    response = _CLIENT.request(
         method,
         _url(path),
         headers=_headers(prefer=prefer),
@@ -74,6 +80,13 @@ def insert(table: str, row: dict[str, Any]) -> dict[str, Any]:
     return data[0] if isinstance(data, list) else data
 
 
+def insert_many(table: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    data = request("POST", f"/rest/v1/{table}", json=rows)
+    return data if isinstance(data, list) else []
+
+
 def update(table: str, match: dict[str, str], row: dict[str, Any]) -> dict[str, Any] | None:
     data = request("PATCH", f"/rest/v1/{table}", params=match, json=row)
     if isinstance(data, list):
@@ -83,7 +96,7 @@ def update(table: str, match: dict[str, str], row: dict[str, Any]) -> dict[str, 
 
 def upload_object(bucket: str, object_path: str, content: bytes, content_type: str) -> str:
     url = f"{settings.supabase_rest_url}/storage/v1/object/{bucket}/{object_path}"
-    response = httpx.post(
+    response = _CLIENT.post(
         url,
         headers={
             "apikey": settings.supabase_service_role_key,

@@ -33,7 +33,7 @@ export default function ImportHistoryPage() {
   return (
     <div>
       <h1 className="font-display text-3xl font-semibold">Import history</h1>
-      <p className="mt-1 text-sm text-[color:var(--muted)]">Previous confirmed CSV catalog imports.</p>
+      <p className="mt-1 text-sm text-[color:var(--muted)]">Pending reviews and completed CSV catalog imports.</p>
       <Link href="/admin/products/import" className="mt-4 inline-block text-sm text-[color:var(--brand-magenta)]">
         Start a new import
       </Link>
@@ -48,6 +48,7 @@ export default function ImportHistoryPage() {
               <th className="p-3">Updated</th>
               <th className="p-3">Unchanged</th>
               <th className="p-3">When</th>
+              <th className="p-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -59,6 +60,18 @@ export default function ImportHistoryPage() {
                 <td className="p-3">{batch.updated_rows ?? "—"}</td>
                 <td className="p-3">{batch.unchanged_rows ?? "—"}</td>
                 <td className="p-3">{batch.created_at ? String(batch.created_at).slice(0, 19) : "—"}</td>
+                <td className="p-3">
+                  {batch.status === "awaiting_confirmation" ? (
+                    <Link
+                      href={`/admin/products/import?batch=${encodeURIComponent(batch.id)}`}
+                      className="text-[color:var(--brand-magenta)] underline"
+                    >
+                      Resume review
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -41,14 +41,15 @@ if (!parsed.success) {
 const data = parsed.data;
 
 function fastapiOrigin() {
-  if (data.FASTAPI_ORIGIN) return data.FASTAPI_ORIGIN.replace(/\/$/, "");
-
   // This platform-provided hostname supports both preview and production
-  // deployments without trusting a user-controlled Host header.
+  // deployments without trusting a user-controlled Host header. Prefer it on
+  // Vercel so a copied local FASTAPI_ORIGIN cannot point production at port 8000.
   const vercelHost = (process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
   if (vercelHost && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelHost)) {
     return `https://${vercelHost}/api/backend`;
   }
+
+  if (data.FASTAPI_ORIGIN) return data.FASTAPI_ORIGIN.replace(/\/$/, "");
 
   return "http://localhost:8000";
 }

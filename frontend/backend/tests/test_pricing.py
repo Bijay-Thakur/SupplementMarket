@@ -5,6 +5,7 @@ from app.services.pricing import (
     discount_percent,
     effective_price_cents,
     sale_price_from_percent,
+    sale_price_from_brand_discount,
     validate_prices,
 )
 
@@ -39,3 +40,11 @@ def test_sale_from_percent():
         sale_price_from_percent(2000, 0)
     with pytest.raises(PricingError):
         sale_price_from_percent(2000, 100)
+
+
+def test_sale_from_brand_discount():
+    assert sale_price_from_brand_discount(2000, 25) == 1500
+    assert sale_price_from_brand_discount(2000, 0) is None
+    assert sale_price_from_brand_discount(1, 1) == 0
+    with pytest.raises(PricingError):
+        sale_price_from_brand_discount(2000, 100)

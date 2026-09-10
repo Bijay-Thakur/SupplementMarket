@@ -16,11 +16,23 @@ export async function fastapiAdmin(path: string, init: RequestInit = {}) {
   }
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${accessToken}`);
-  const res = await fetch(`${serverEnv.fastapiOrigin}/api/v1/admin/live${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${serverEnv.fastapiOrigin}/api/v1/admin/live${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
+  } catch {
+    const localHelp = serverEnv.fastapiOrigin.includes("localhost")
+      ? " Start local development from the project root with npm run dev so both the website and CSV service are running."
+      : " Check the configured FASTAPI_ORIGIN and deployment health.";
+    throw new ApiHttpError(
+      503,
+      `The catalog import service is unavailable.${localHelp}`,
+      "service_unavailable",
+    );
+  }
   const text = await res.text();
   let data: unknown = null;
   try {

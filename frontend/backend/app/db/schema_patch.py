@@ -41,6 +41,10 @@ _IMAGE_COLS = [
     ("original_path", "VARCHAR(500)"),
 ]
 
+_BRAND_COLS = [
+    ("discount_percent", "INTEGER"),
+]
+
 
 def patch_sqlite(engine: Engine) -> None:
     insp = inspect(engine)
@@ -49,6 +53,13 @@ def patch_sqlite(engine: Engine) -> None:
         return
     existing = {c["name"] for c in insp.get_columns("products")}
     with engine.begin() as conn:
+        if "brands" in tables:
+            brand_existing = {c["name"] for c in insp.get_columns("brands")}
+            for name, ddl in _BRAND_COLS:
+                if name in brand_existing:
+                    continue
+                conn.execute(text(f"ALTER TABLE brands ADD COLUMN {name} {ddl}"))
+                logger.info("Added brands.%s", name)
         for name, ddl in _PRODUCT_COLS:
             if name in existing:
                 continue

@@ -16,6 +16,10 @@ const adminAuthSql = readFileSync(
   path.join(process.cwd(), "../supabase/migrations/20260903050000_admin_catalog_authorization.sql"),
   "utf8",
 );
+const brandDiscountSql = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260909010000_brand_discounts.sql"),
+  "utf8",
+);
 
 describe("committed supabase catalog migrations", () => {
   it("enables RLS and keeps catalog writes off public roles", () => {
@@ -29,6 +33,14 @@ describe("committed supabase catalog migrations", () => {
     expect(adminAuthSql).toMatch(/Admins write products/);
     expect(adminAuthSql).toMatch(/grant insert, update, delete on public.products to authenticated/);
     expect(adminAuthSql).toMatch(/Admins insert product images/);
+  });
+
+  it("keeps Store SRP synchronized with each brand discount", () => {
+    expect(brandDiscountSql).toMatch(/add column discount_percent integer/i);
+    expect(brandDiscountSql).toMatch(/brands_sync_discount_prices/i);
+    expect(brandDiscountSql).toMatch(/product_variants_apply_brand_discount/i);
+    expect(brandDiscountSql).toMatch(/products_sync_brand_discount_prices/i);
+    expect(brandDiscountSql).toMatch(/round\([\s\S]*regular_price_cents[\s\S]*100 - [\s\S]*discount_percent/i);
   });
 });
 

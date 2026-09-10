@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from functools import lru_cache
 from urllib.parse import urlparse
 
 import httpx
@@ -16,6 +17,28 @@ BLOCKED_HOSTS = {
 }
 
 MAX_IMAGE_BYTES = 5_000_000
+_IMAGE_CLIENT = httpx.Client(limits=httpx.Limits(max_connections=8, max_keepalive_connections=4))
+
+
+@lru_cache(maxsize=256)
+def _resolved_host_allowed(host: str) -> tuple[bool, str | None]:
+    """Resolve each image host once per worker instead of once per CSV row."""
+    try:
+        infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    except OSError:
+        return False, "Image host could not be resolved."
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return False, "Image host resolves to a private network."
+    return True, None
 
 
 def image_url_allowed(url: str) -> tuple[bool, str | None]:
@@ -38,22 +61,7 @@ def image_url_allowed(url: str) -> tuple[bool, str | None]:
             return False, "Image host is not allowed."
     except ValueError:
         pass
-    try:
-        infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    except OSError:
-        return False, "Image host could not be resolved."
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            return False, "Image host resolves to a private network."
-    return True, None
+    return _resolved_host_allowed(host)
 
 
 def sniff_image(content: bytes, declared_type: str | None = None) -> tuple[str, str] | None:
@@ -76,7 +84,7 @@ def download_product_image(url: str) -> tuple[bytes, str, str] | None:
     if not ok:
         return None
     try:
-        response = httpx.get(
+        response = _IMAGE_CLIENT.get(
             url,
             timeout=httpx.Timeout(12.0, connect=5.0),
             follow_redirects=False,

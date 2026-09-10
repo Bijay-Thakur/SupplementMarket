@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # Local product-image storage (served by FastAPI in dev only).
     storage_dir: str = "storage/products"
     catalog_imports_dir: str = "storage/catalog-imports"
+    seed_demo_data: bool = False
     max_upload_bytes: int = 5_000_000  # 5 MB
     max_catalog_page_bytes: int = 2_000_000
     catalog_request_timeout_seconds: float = 25.0
