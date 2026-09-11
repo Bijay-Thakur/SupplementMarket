@@ -42,7 +42,17 @@ describe("Vercel backend boundary", () => {
 
     expect(vercelOrigin).toBeGreaterThan(-1);
     expect(configuredOrigin).toBeGreaterThan(vercelOrigin);
+    expect(serverEnv).toContain("const productionHost = (process.env.VERCEL_PROJECT_PRODUCTION_URL");
+    expect(serverEnv).toContain("const configuredSite = (process.env.NEXT_PUBLIC_SITE_URL");
+    expect(serverEnv).toContain("productionHost || configuredSiteHost ||");
     expect(serverEnv).toContain("https://${vercelHost}/api/backend");
+  });
+
+  it("does not follow or accept an HTML deployment-protection response", () => {
+    const proxy = read("src/lib/admin/fastapi-proxy.ts");
+    expect(proxy).toContain('redirect: "manual"');
+    expect(proxy).toContain("The catalog service returned an unexpected response.");
+    expect(proxy).not.toContain('data = { error: "upstream"');
   });
 
   it("never defaults a production deploy to the bundled demo catalog", () => {

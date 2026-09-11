@@ -45,10 +45,25 @@ if (!parsed.success) {
 const data = parsed.data;
 
 function fastapiOrigin() {
-  // This platform-provided hostname supports both preview and production
-  // deployments without trusting a user-controlled Host header. Prefer it on
-  // Vercel so a copied local FASTAPI_ORIGIN cannot point production at port 8000.
-  const vercelHost = (process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
+  // The generated VERCEL_URL can be protected by Vercel Authentication even
+  // when the project's production domain is public. Server-to-server requests
+  // to that protected hostname are redirected to an HTML SSO page. Prefer the
+  // stable production hostname for production functions so the colocated
+  // Python API remains reachable without weakening deployment protection.
+  const productionHost = (process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
+  const configuredSite = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+  let configuredSiteHost = "";
+  if (process.env.VERCEL && configuredSite) {
+    try {
+      const parsedSite = new URL(configuredSite);
+      if (parsedSite.protocol === "https:" && parsedSite.hostname !== "localhost") {
+        configuredSiteHost = parsedSite.host;
+      }
+    } catch {
+      /* Public environment validation reports malformed URLs separately. */
+    }
+  }
+  const vercelHost = productionHost || configuredSiteHost || (process.env.VERCEL_URL || "").trim();
   if (vercelHost && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelHost)) {
     return `https://${vercelHost}/api/backend`;
   }

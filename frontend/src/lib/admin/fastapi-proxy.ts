@@ -6,7 +6,9 @@ import { ApiHttpError } from "@/lib/demo-store/engine";
 import { getVerifiedAccessToken, requireAdmin } from "@/lib/auth/server";
 
 function signingSecret(): string {
-  const secret = serverEnv.adminInternalSecret || serverEnv.supabaseServiceRoleKey;
+  const internalSecret = serverEnv.adminInternalSecret.trim();
+  const serviceRoleKey = serverEnv.supabaseServiceRoleKey?.trim() || "";
+  const secret = internalSecret || serviceRoleKey;
   if (!secret) {
     throw new ApiHttpError(
       503,
@@ -66,6 +68,9 @@ export async function fastapiAdmin(path: string, init: RequestInit = {}) {
       ...init,
       headers,
       cache: "no-store",
+      // Never follow a deployment-protection redirect and accidentally parse
+      // its HTML login page as catalog data.
+      redirect: "manual",
     });
   } catch {
     const localHelp = serverEnv.fastapiOrigin.includes("localhost")
@@ -78,11 +83,15 @@ export async function fastapiAdmin(path: string, init: RequestInit = {}) {
     );
   }
   const text = await res.text();
-  let data: unknown = null;
+  let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    data = { error: "upstream", detail: "Catalog service returned an unexpected response." };
+    throw new ApiHttpError(
+      502,
+      "The catalog service returned an unexpected response. Check the Vercel function URL and deployment protection settings.",
+      "upstream",
+    );
   }
   if (!res.ok) {
     const body = data as { detail?: string; error?: string };
