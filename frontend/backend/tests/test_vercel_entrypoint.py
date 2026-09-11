@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 
 def _load_vercel_app():
-    entrypoint = Path(__file__).resolve().parents[2] / "api" / "backend" / "index.py"
+    entrypoint = Path(__file__).resolve().parents[2] / "api" / "backend.py"
     spec = importlib.util.spec_from_file_location("bnm_vercel_backend", entrypoint)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -17,7 +17,7 @@ def _load_vercel_app():
 
 def test_vercel_health_route() -> None:
     with TestClient(_load_vercel_app()) as client:
-        response = client.get("/api/backend/health")
+        response = client.get("/api/backend")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert response.headers["cache-control"] == "private, no-store"
@@ -26,7 +26,10 @@ def test_vercel_health_route() -> None:
 
 def test_vercel_admin_route_fails_closed_without_token() -> None:
     with TestClient(_load_vercel_app()) as client:
-        response = client.get("/api/backend/api/v1/admin/live/products")
+        response = client.get(
+            "/api/backend",
+            params={"__path": "/api/v1/admin/live/products"},
+        )
     assert response.status_code == 401
     assert response.json()["error"] == "unauthorized"
     assert "traceback" not in response.text.lower()
@@ -34,5 +37,8 @@ def test_vercel_admin_route_fails_closed_without_token() -> None:
 
 def test_vercel_does_not_mount_local_dev_routes() -> None:
     with TestClient(_load_vercel_app()) as client:
-        response = client.post("/api/backend/api/v1/dev/reset")
+        response = client.post(
+            "/api/backend",
+            params={"__path": "/api/v1/dev/reset"},
+        )
     assert response.status_code == 404

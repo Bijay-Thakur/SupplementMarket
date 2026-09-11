@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "functions": {
-    "api/backend/index.py": {
+    "api/backend.py": {
       "excludeFiles": "{backend/tests/**,backend/alembic/**,backend/storage/**,backend/.venv/**,backend/**/*.db,**/__pycache__/**,**/*.pyc}"
     }
   }

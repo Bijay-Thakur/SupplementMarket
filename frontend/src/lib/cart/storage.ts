@@ -3,10 +3,11 @@
  * Display snapshots are advisory; checkout always revalidates server prices.
  */
 
-// Version 2 starts every browser with a clean cart. The previous key may
-// contain legacy demo items from early builds of the storefront.
-export const CART_STORAGE_KEY = "bnm-cart-v2";
-export const CART_VERSION = 2;
+// Version 3 clears carts created by the old demo storefront. Once a customer
+// adds an item, the new cart continues to persist normally in this browser.
+export const CART_STORAGE_KEY = "bnm-cart-v3";
+export const CART_VERSION = 3;
+const LEGACY_CART_KEYS = ["bnm-cart", "bnm-cart-v1", "bnm-cart-v2"];
 
 export type CartItem = {
   productId: number | string;
@@ -29,6 +30,7 @@ const empty: CartState = { version: CART_VERSION, items: [] };
 export function loadCart(): CartState {
   if (typeof window === "undefined") return empty;
   try {
+    for (const key of LEGACY_CART_KEYS) localStorage.removeItem(key);
     const raw = localStorage.getItem(CART_STORAGE_KEY);
     if (!raw) return empty;
     const parsed = JSON.parse(raw) as CartState;

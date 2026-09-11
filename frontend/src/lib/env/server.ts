@@ -9,7 +9,7 @@ const serverSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STORE_TIMEZONE: z.string().min(1).default("America/New_York"),
   AUTH_PROVIDER: z.enum(["mock", "supabase"]).default("supabase"),
-  DATA_PROVIDER: z.enum(["snapshot", "supabase"]).default("snapshot"),
+  DATA_PROVIDER: z.enum(["snapshot", "supabase"]),
   PAYMENT_PROVIDER: z.enum(["disabled", "stripe_test", "stripe_live"]).default("disabled"),
   MOCK_AUTH_SECRET: z.string().optional(),
   APP_ENV: z.string().optional(),
@@ -24,7 +24,11 @@ const parsed = serverSchema.safeParse({
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STORE_TIMEZONE: process.env.STORE_TIMEZONE,
   AUTH_PROVIDER: process.env.AUTH_PROVIDER ?? "supabase",
-  DATA_PROVIDER: process.env.DATA_PROVIDER ?? "snapshot",
+  // A production deploy must never silently fall back to the bundled demo
+  // catalog. Local development and tests may still opt into the snapshot.
+  DATA_PROVIDER:
+    process.env.DATA_PROVIDER ??
+    (process.env.NODE_ENV === "production" ? "supabase" : "snapshot"),
   PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER ?? "disabled",
   MOCK_AUTH_SECRET: process.env.MOCK_AUTH_SECRET,
   APP_ENV: process.env.APP_ENV,

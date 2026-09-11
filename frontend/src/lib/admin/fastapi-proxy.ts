@@ -18,7 +18,14 @@ export async function fastapiAdmin(path: string, init: RequestInit = {}) {
   headers.set("Authorization", `Bearer ${accessToken}`);
   let res: Response;
   try {
-    res = await fetch(`${serverEnv.fastapiOrigin}/api/v1/admin/live${path}`, {
+    const upstreamPath = `/api/v1/admin/live${path}`;
+    // Vercel maps api/backend.py to one exact function route. Forward the
+    // internal FastAPI path as a validated query value so nested admin routes
+    // do not fall into Vercel's directory/trailing-slash redirect loop.
+    const upstreamUrl = serverEnv.fastapiOrigin.endsWith("/api/backend")
+      ? `${serverEnv.fastapiOrigin}?__path=${encodeURIComponent(upstreamPath)}`
+      : `${serverEnv.fastapiOrigin}${upstreamPath}`;
+    res = await fetch(upstreamUrl, {
       ...init,
       headers,
       cache: "no-store",

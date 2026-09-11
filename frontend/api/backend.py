@@ -1,8 +1,9 @@
-"""Minimal Vercel entrypoint for the authenticated Supabase admin API.
+"""Vercel entrypoint for the authenticated Supabase admin API.
 
-Production intentionally mounts only the Supabase-backed routes that
-independently re-check the caller's JWT and administrator role. Local SQLite,
-seed/reset, collector, and local-file routes are not deployed.
+Vercel exposes this file at the exact /api/backend route. The Next.js
+server-side proxy supplies the intended FastAPI route in __path; this avoids
+a directory-index trailing-slash loop while keeping the Python surface
+limited to authenticated live-admin operations.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2] / "backend"
+_BACKEND_ROOT = Path(__file__).resolve().parents[1] / "backend"
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
@@ -23,6 +24,7 @@ from app.api import routes_admin_csv  # noqa: E402
 from app.core.errors import AppError  # noqa: E402
 
 logger = logging.getLogger("bnm.vercel")
+_LIVE_ADMIN_PREFIX = "/api/v1/admin/live"
 
 backend_api = FastAPI(
     title="Bronxville Natural Market Admin API",
@@ -34,7 +36,18 @@ backend_api = FastAPI(
 
 
 @backend_api.middleware("http")
-async def security_headers(request: Request, call_next):
+async def vercel_path_bridge(request: Request, call_next):
+    """Route one Vercel function URL to the restricted FastAPI admin router."""
+    forwarded_path = request.query_params.get("__path")
+    if request.url.path == "/api/backend" and forwarded_path:
+        if not (
+            forwarded_path == _LIVE_ADMIN_PREFIX
+            or forwarded_path.startswith(f"{_LIVE_ADMIN_PREFIX}/")
+        ):
+            return JSONResponse(status_code=404, content={"detail": "Not found."})
+        request.scope["path"] = forwarded_path
+        request.scope["raw_path"] = forwarded_path.encode("utf-8")
+
     response = await call_next(request)
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -77,13 +90,10 @@ async def unhandled_error(_request: Request, exc: Exception):
     )
 
 
-@backend_api.get("/health", include_in_schema=False)
+@backend_api.get("/api/backend", include_in_schema=False)
 def health():
     return {"status": "ok"}
 
 
 backend_api.include_router(routes_admin_csv.router, prefix="/api/v1")
-
-# Nested Python functions receive the full /api/backend/* path.
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-app.mount("/api/backend", backend_api)
+app = backend_api

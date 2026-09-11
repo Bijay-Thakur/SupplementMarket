@@ -7,8 +7,9 @@ const read = (relative: string) => readFileSync(path.join(root, relative), "utf8
 
 describe("Vercel backend boundary", () => {
   it("deploys Python below a non-conflicting API path", () => {
-    const entrypoint = read("api/backend/index.py");
-    expect(entrypoint).toContain('app.mount("/api/backend", backend_api)');
+    const entrypoint = read("api/backend.py");
+    expect(entrypoint).toContain('@backend_api.get("/api/backend"');
+    expect(entrypoint).toContain('request.query_params.get("__path")');
     expect(entrypoint).toContain('prefix="/api/v1"');
     expect(entrypoint).toContain("routes_admin_csv.router");
     expect(entrypoint).not.toContain("routes_dev.router");
@@ -21,6 +22,7 @@ describe("Vercel backend boundary", () => {
     expect(serverEnv).toContain("must never be prefixed with NEXT_PUBLIC_");
     expect(proxy).toContain("getVerifiedAccessToken");
     expect(proxy).toContain('headers.set("Authorization"');
+    expect(proxy).toContain("encodeURIComponent(upstreamPath)");
     expect(proxy).not.toContain("supabaseServiceRoleKey");
   });
 
@@ -32,6 +34,13 @@ describe("Vercel backend boundary", () => {
     expect(vercelOrigin).toBeGreaterThan(-1);
     expect(configuredOrigin).toBeGreaterThan(vercelOrigin);
     expect(serverEnv).toContain("https://${vercelHost}/api/backend");
+  });
+
+  it("never defaults a production deploy to the bundled demo catalog", () => {
+    const serverEnv = read("src/lib/env/server.ts");
+    expect(serverEnv).toContain(
+      'process.env.NODE_ENV === "production" ? "supabase" : "snapshot"',
+    );
   });
 
   it("excludes local secrets, databases, tests, and storage", () => {

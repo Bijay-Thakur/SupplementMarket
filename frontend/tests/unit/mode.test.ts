@@ -65,4 +65,14 @@ describe("runtime mode validation", () => {
       /NEXT_PUBLIC_/,
     );
   });
+
+  it("rejects the bundled snapshot in production", () => {
+    expect(
+      validateRuntimeMode({
+        ...supabaseAuth,
+        nodeEnv: "production",
+        dataProvider: "snapshot",
+      }).join(" "),
+    ).toMatch(/Production requires DATA_PROVIDER=supabase/);
+  });
 });
