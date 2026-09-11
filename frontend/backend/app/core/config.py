@@ -90,7 +90,21 @@ class Settings(BaseSettings):
 
     @property
     def supabase_publishable_key(self) -> str:
-        return self.next_public_supabase_publishable_key or self.next_public_supabase_anon_key
+        # Match the browser/server client selection. Projects transitioning to
+        # the newer publishable key can temporarily have both values present;
+        # a legacy JWT anon key remains valid and avoids the two runtimes using
+        # different credentials because one field contains a stale value.
+        anon = self.next_public_supabase_anon_key.strip()
+        publishable = self.next_public_supabase_publishable_key.strip()
+        if anon.startswith("eyJ"):
+            return anon
+        return publishable or anon
+
+    @property
+    def admin_proxy_secret(self) -> str:
+        # ADMIN_INTERNAL_SECRET is preferred. The service-role key is already a
+        # server-only shared secret and is a safe fallback during deployment.
+        return self.admin_internal_secret.strip() or self.supabase_service_role_key.strip()
 
     @property
     def supabase_configured(self) -> bool:

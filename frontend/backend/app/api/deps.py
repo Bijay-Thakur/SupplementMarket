@@ -1,6 +1,10 @@
 """Shared FastAPI dependencies."""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import time
+import uuid
 from dataclasses import dataclass
 
 import httpx
@@ -127,12 +131,49 @@ def _role_for_user(user_id: str, access_token: str) -> str | None:
     return None
 
 
+def _proxied_admin(request: Request) -> AuthenticatedAdmin | None:
+    """Verify the short-lived assertion created by the authenticated Next API.
+
+    The public Python endpoint still accepts a Supabase bearer token as a
+    fallback. The assertion prevents a second external auth/role lookup from
+    making every admin catalog operation depend on another network round trip.
+    """
+    user_id = (request.headers.get("x-bnm-admin-user") or "").strip()
+    timestamp_text = (request.headers.get("x-bnm-admin-timestamp") or "").strip()
+    supplied = (request.headers.get("x-bnm-admin-signature") or "").strip().lower()
+    if not (user_id or timestamp_text or supplied):
+        return None
+    if not (user_id and timestamp_text and supplied and settings.admin_proxy_secret):
+        raise UnauthorizedError("Sign in is required.")
+    try:
+        uuid.UUID(user_id)
+        timestamp = int(timestamp_text)
+    except (ValueError, TypeError) as exc:
+        raise UnauthorizedError("Sign in is required.") from exc
+    if abs(int(time.time()) - timestamp) > 300:
+        raise UnauthorizedError("Sign in is required.")
+    path = str(request.scope.get("path") or "")
+    message = f"{timestamp_text}\n{request.method.upper()}\n{path}\n{user_id}".encode()
+    expected = hmac.new(
+        settings.admin_proxy_secret.encode(),
+        message,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(supplied, expected):
+        raise UnauthorizedError("Sign in is required.")
+    return AuthenticatedAdmin(user_id=user_id, email="", access_token="")
+
+
 def require_supabase_admin(request: Request) -> AuthenticatedAdmin:
     """Validate the user JWT, then require public.user_roles.role = admin.
 
     User ID and role are taken only from the verified token and database.
     Request bodies are never used as authority.
     """
+    proxied = _proxied_admin(request)
+    if proxied is not None:
+        return proxied
+
     token = _bearer_token(request)
     user = _verify_access_token(token)
     user_id = str(user["id"])

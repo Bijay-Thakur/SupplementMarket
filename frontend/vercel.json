@@ -3,7 +3,8 @@
   "framework": "nextjs",
   "functions": {
     "api/backend.py": {
-      "excludeFiles": "{backend/tests/**,backend/alembic/**,backend/storage/**,backend/.venv/**,backend/**/*.db,**/__pycache__/**,**/*.pyc}"
+      "excludeFiles": "{backend/tests/**,backend/alembic/**,backend/storage/**,backend/.venv/**,backend/**/*.db,**/__pycache__/**,**/*.pyc}",
+      "maxDuration": 60
     }
   }
 }

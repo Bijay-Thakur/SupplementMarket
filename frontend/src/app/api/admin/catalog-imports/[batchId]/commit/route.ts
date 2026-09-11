@@ -5,6 +5,8 @@ import { fastapiAdmin } from "@/lib/admin/fastapi-proxy";
 import { ApiHttpError } from "@/lib/demo-store/engine";
 import { assertSameOrigin } from "@/lib/auth/origin";
 
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ batchId: string }> }) {

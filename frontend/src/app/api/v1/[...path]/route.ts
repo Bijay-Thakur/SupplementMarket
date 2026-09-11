@@ -48,6 +48,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ path: string[] }> };
 

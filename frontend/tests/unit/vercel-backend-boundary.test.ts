@@ -21,9 +21,18 @@ describe("Vercel backend boundary", () => {
     expect(serverEnv).toContain("NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY");
     expect(serverEnv).toContain("must never be prefixed with NEXT_PUBLIC_");
     expect(proxy).toContain("getVerifiedAccessToken");
+    expect(proxy).toContain("requireAdmin");
+    expect(proxy).toContain('createHmac("sha256"');
     expect(proxy).toContain('headers.set("Authorization"');
-    expect(proxy).toContain("encodeURIComponent(upstreamPath)");
-    expect(proxy).not.toContain("supabaseServiceRoleKey");
+    expect(proxy).toContain('headers.set("X-BNM-Admin-Signature"');
+    expect(proxy).not.toContain('headers.set("X-BNM-Admin-Signature", signingSecret()');
+  });
+
+  it("forwards product filters as query parameters instead of route text", () => {
+    const proxy = read("src/lib/admin/fastapi-proxy.ts");
+    expect(proxy).toContain("const params = new URLSearchParams(search)");
+    expect(proxy).toContain('params.set("__path", upstreamPath)');
+    expect(proxy).not.toContain("encodeURIComponent(upstreamPath)");
   });
 
   it("uses the same-deployment Python function instead of a local port on Vercel", () => {

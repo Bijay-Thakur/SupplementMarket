@@ -14,6 +14,18 @@ class FakeResponse:
         return self._payload
 
 
+def test_backend_prefers_legacy_anon_jwt_when_both_public_keys_exist(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "next_public_supabase_anon_key", "eyJlegacy-anon")
+    monkeypatch.setattr(settings, "next_public_supabase_publishable_key", "sb_publishable_stale")
+    assert settings.supabase_publishable_key == "eyJlegacy-anon"
+
+
+def test_backend_uses_publishable_key_without_legacy_anon_jwt(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "next_public_supabase_anon_key", "")
+    monkeypatch.setattr(settings, "next_public_supabase_publishable_key", "sb_publishable_current")
+    assert settings.supabase_publishable_key == "sb_publishable_current"
+
+
 def test_protected_endpoint_missing_token(client) -> None:
     r = client.get("/api/v1/admin/live/products")
     assert r.status_code == 401

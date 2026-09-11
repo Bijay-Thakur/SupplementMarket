@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Python has its own lint/test toolchain. Avoid traversing virtualenv and
+    // pytest cache directories, which may also have restricted permissions.
+    "backend/**",
   ]),
 ]);
 

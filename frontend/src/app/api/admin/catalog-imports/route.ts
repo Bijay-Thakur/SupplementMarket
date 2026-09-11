@@ -5,6 +5,7 @@ import { ApiHttpError } from "@/lib/demo-store/engine";
 import { assertSameOrigin } from "@/lib/auth/origin";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function fail(err: unknown) {
   if (err instanceof ApiHttpError) {
