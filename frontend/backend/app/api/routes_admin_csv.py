@@ -11,7 +11,7 @@ from app.api.deps import require_supabase_admin
 from app.catalog.csv_images import sniff_image
 from app.catalog.csv_normalize import slugify
 from app.core.config import settings
-from app.core.errors import ForbiddenError, NotFoundError, ValidationError
+from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.services import catalog_import
 from app.services import supabase_rest as sb
 
@@ -114,11 +114,50 @@ def patch_brand(brand_id: str, body: dict[str, Any]):
 
 
 def _public_product(row: dict[str, Any], *, include_cost: bool) -> dict[str, Any]:
-    variant = (row.get("product_variants") or [None])[0] or {}
+    variants = row.get("product_variants") or []
+    variant = next(
+        (item for item in variants if item and item.get("is_default")),
+        variants[0] if variants else {},
+    ) or {}
     brand = row.get("brands") or {}
     category = row.get("categories") or {}
     images = row.get("product_images") or []
     primary = next((img for img in images if img.get("is_primary")), images[0] if images else None)
+    tags = row.get("product_tags") or []
+    dietary_tags = {
+        str(tag.get("tag") or "").strip().lower()
+        for tag in tags
+        if tag.get("tag_type") in {"dietary", "free_from"}
+    }
+    regular_price = int(variant.get("regular_price_cents") or 0)
+    raw_sale_price = variant.get("sale_price_cents")
+    sale_price = int(raw_sale_price) if raw_sale_price is not None else None
+    on_sale = sale_price is not None and sale_price < regular_price
+    effective_price = sale_price if on_sale else regular_price
+    discount = round((regular_price - sale_price) * 100 / regular_price) if on_sale and regular_price else None
+
+    def image_url(image: dict[str, Any]) -> str | None:
+        path = image.get("storage_path")
+        if not path:
+            return None
+        if str(path).startswith(("http://", "https://")):
+            return str(path)
+        return f"{settings.supabase_rest_url}/storage/v1/object/public/product-images/{path}"
+
+    image_payload = [
+        {
+            "id": image.get("id") or index + 1,
+            "url": image_url(image),
+            "alt_text": image.get("alt_text"),
+            "display_order": int(image.get("display_order") or index),
+            "is_primary": bool(image.get("is_primary")),
+        }
+        for index, image in enumerate(images)
+        if image_url(image)
+    ]
+    size = None
+    if variant.get("size_value") is not None:
+        size = f"{variant['size_value']}{variant.get('size_unit') or ''}"
     payload = {
         "id": row["id"],
         "name": row["name"],
@@ -128,33 +167,54 @@ def _public_product(row: dict[str, Any], *, include_cost: bool) -> dict[str, Any
         "category_name": category.get("name"),
         "category_slug": category.get("slug"),
         "form": variant.get("form"),
-        "size": None,
+        "size": size,
         "count": variant.get("unit_count"),
         "strength_value": variant.get("strength_value"),
         "strength_unit": variant.get("strength_unit"),
         "availability": variant.get("availability") or "in_stock",
-        "regular_price_cents": variant.get("regular_price_cents"),
-        "sale_price_cents": variant.get("sale_price_cents"),
-        "sku": variant.get("sku"),
+        "regular_price_cents": regular_price,
+        "sale_price_cents": sale_price,
+        "effective_price_cents": effective_price,
+        "discount_percent": discount,
+        "on_sale": on_sale,
+        "sku": variant.get("sku") or "",
         "upc": variant.get("upc"),
         "supplier_sku": variant.get("supplier_sku"),
-        "is_featured": row.get("is_featured"),
-        "is_bestseller": row.get("is_best_seller"),
-        "is_new": row.get("is_new"),
+        "is_featured": bool(row.get("is_featured")),
+        "is_bestseller": bool(row.get("is_best_seller")),
+        "is_new": bool(row.get("is_new")),
+        "is_demo": False,
         "is_active": row.get("status") == "active",
         "is_archived": row.get("status") == "archived",
-        "thumbnail_url": (
-            f"{settings.supabase_rest_url}/storage/v1/object/public/product-images/{primary['storage_path']}"
-            if primary and primary.get("storage_path")
-            else None
-        ),
+        "thumbnail_url": image_url(primary) if primary else None,
+        "primary_image_url": image_url(primary) if primary else None,
         "short_description": row.get("short_description"),
         "long_description": row.get("description"),
         "search_aliases": row.get("search_aliases") or [],
+        "ingredient_highlights": ", ".join(
+            str(tag.get("tag")) for tag in tags if tag.get("tag_type") == "ingredient"
+        ) or None,
+        "usage_text": row.get("suggested_use"),
+        "warnings": row.get("warnings"),
+        "wellness_tags": [
+            str(tag.get("tag")) for tag in tags if tag.get("tag_type") == "health_goal"
+        ],
+        "images": image_payload,
+        "dietary": {
+            "vegan": "vegan" in dietary_tags,
+            "vegetarian": "vegetarian" in dietary_tags,
+            "organic": "organic" in dietary_tags,
+            "gluten_free": "gluten_free" in dietary_tags or "gluten-free" in dietary_tags,
+            "soy_free": "soy_free" in dietary_tags or "soy-free" in dietary_tags,
+            "dairy_free": "dairy_free" in dietary_tags or "dairy-free" in dietary_tags,
+            "alcohol_free": "alcohol_free" in dietary_tags or "alcohol-free" in dietary_tags,
+            "non_gmo": "non_gmo" in dietary_tags or "non-gmo" in dietary_tags,
+        },
         "brand_id": row.get("brand_id") or brand.get("id"),
         "category_id": row.get("category_id") or category.get("id"),
         "flavor": variant.get("flavor"),
         "updated_at": row.get("updated_at"),
+        "created_at": row.get("created_at"),
         "status": row.get("status"),
     }
     if include_cost:
@@ -245,10 +305,18 @@ def get_import(batch_id: str):
     return catalog_import.get_batch(batch_id)
 
 
+@router.delete("/catalog-imports/{batch_id}")
+def delete_import(batch_id: str, body: dict[str, Any], request: Request):
+    origin = request.headers.get("origin")
+    if origin and origin != settings.frontend_origin:
+        raise ForbiddenError("Invalid request origin.")
+    return catalog_import.delete_batch(batch_id, str(body.get("confirmation") or ""))
+
+
 @router.get("/products")
 def list_products(q: str | None = None, brand: str | None = None, category: str | None = None, availability: str | None = None):
     params: dict[str, str] = {
-        "select": "id,name,slug,status,is_featured,is_best_seller,is_new,short_description,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,strength_value,strength_unit,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(storage_path,is_primary,alt_text)",
+        "select": "id,name,slug,status,brand_id,category_id,is_featured,is_best_seller,is_new,short_description,description,suggested_use,warnings,search_aliases,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,size_value,size_unit,strength_value,strength_unit,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(id,storage_path,is_primary,alt_text,display_order),product_tags(tag_type,tag)",
         "order": "updated_at.desc",
         "limit": "200",
     }
@@ -276,7 +344,7 @@ def list_products(q: str | None = None, brand: str | None = None, category: str 
 @router.get("/products/{product_id}")
 def get_product(product_id: str):
     params: dict[str, str] = {
-        "select": "id,name,slug,status,brand_id,category_id,is_featured,is_best_seller,is_new,short_description,description,search_aliases,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,size_value,size_unit,strength_value,strength_unit,flavor,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(storage_path,is_primary,alt_text)",
+        "select": "id,name,slug,status,brand_id,category_id,is_featured,is_best_seller,is_new,short_description,description,suggested_use,warnings,search_aliases,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,size_value,size_unit,strength_value,strength_unit,flavor,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(id,storage_path,is_primary,alt_text,display_order),product_tags(tag_type,tag)",
         "id": f"eq.{product_id}",
         "limit": "1",
     }
@@ -365,15 +433,39 @@ def patch_product(product_id: str, body: dict[str, Any]):
     if not rows:
         raise ValidationError("Product not found.")
     product = rows[0]
-    variant = (product.get("product_variants") or [None])[0]
+    if body.get("expected_updated_at") and body["expected_updated_at"] != product.get("updated_at"):
+        raise ConflictError("This product changed after you opened it. Refresh before saving again.")
+    variants = product.get("product_variants") or []
+    variant = next(
+        (item for item in variants if item and item.get("is_default")),
+        variants[0] if variants else None,
+    )
+    name = str(body.get("name", product.get("name")) or "").strip()
+    if not name:
+        raise ValidationError("Product name is required.", fields={"name": "Required"})
     product_patch = {
-        "name": catalog_import.merge_nonblank(product.get("name"), body.get("name")),
-        "short_description": catalog_import.merge_nonblank(product.get("short_description"), body.get("short_description")),
-        "description": catalog_import.merge_nonblank(product.get("description"), body.get("description") or body.get("long_description")),
+        "name": name,
         "is_featured": body.get("is_featured", product.get("is_featured")),
         "is_best_seller": body.get("is_bestseller", body.get("is_best_seller", product.get("is_best_seller"))),
         "is_new": body.get("is_new", product.get("is_new")),
     }
+    if "brand_id" in body:
+        product_patch["brand_id"] = body.get("brand_id")
+    if "category_id" in body:
+        product_patch["category_id"] = body.get("category_id")
+    if "short_description" in body:
+        product_patch["short_description"] = body.get("short_description") or None
+    if "description" in body or "long_description" in body:
+        product_patch["description"] = body.get("description") or body.get("long_description") or None
+    if "usage_text" in body:
+        product_patch["suggested_use"] = body.get("usage_text") or None
+    if "warnings" in body:
+        product_patch["warnings"] = body.get("warnings") or None
+    if "search_aliases" in body:
+        aliases = body.get("search_aliases")
+        if not isinstance(aliases, list) or any(not isinstance(alias, str) for alias in aliases):
+            raise ValidationError("Search aliases must be a list of text values.")
+        product_patch["search_aliases"] = [alias.strip() for alias in aliases if alias.strip()]
     if "is_active" in body:
         product_patch["status"] = "active" if body.get("is_active") else "archived"
     if "is_archived" in body:
@@ -393,12 +485,32 @@ def patch_product(product_id: str, body: dict[str, Any]):
                 "strength_unit": catalog_import.merge_nonblank(variant.get("strength_unit"), body.get("strength_unit")),
                 "flavor": catalog_import.merge_nonblank(variant.get("flavor"), body.get("flavor")),
                 "regular_price_cents": body.get("regular_price_cents", variant.get("regular_price_cents")),
-                "sale_price_cents": body.get("sale_price_cents", variant.get("sale_price_cents")),
-                "cost_price_cents": catalog_import.merge_nonblank(variant.get("cost_price_cents"), body.get("cost_price_cents")),
+                "sale_price_cents": None if body.get("remove_sale") else body.get("sale_price_cents", variant.get("sale_price_cents")),
+                "cost_price_cents": body.get("cost_price_cents", variant.get("cost_price_cents")),
                 "availability": body.get("availability", variant.get("availability")),
             },
         )
-    return {"id": product_id, "ok": True}
+    dietary_fields = (
+        "vegan",
+        "vegetarian",
+        "organic",
+        "gluten_free",
+        "soy_free",
+        "dairy_free",
+        "alcohol_free",
+        "non_gmo",
+    )
+    if any(field in body for field in dietary_fields):
+        sb.delete("product_tags", {"product_id": f"eq.{product_id}", "tag_type": "in.(dietary,free_from)"})
+        sb.insert_many(
+            "product_tags",
+            [
+                {"product_id": product_id, "tag_type": "dietary", "tag": field}
+                for field in dietary_fields
+                if bool(body.get(field))
+            ],
+        )
+    return get_product(product_id)
 
 
 @router.post("/products/{product_id}/image")

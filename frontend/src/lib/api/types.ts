@@ -41,6 +41,8 @@ export type ProductDetail = ProductListItem & {
   long_description: string | null;
   sku: string;
   upc: string | null;
+  supplier_sku?: string | null;
+  cost_price_cents?: number | null;
   brand_id?: number | string | null;
   category_id?: number | string | null;
   ingredient_highlights: string | null;
@@ -48,7 +50,7 @@ export type ProductDetail = ProductListItem & {
   warnings: string | null;
   search_aliases: string[];
   wellness_tags: string[];
-  images: { id: number; url: string; alt_text: string | null; display_order: number; is_primary: boolean }[];
+  images: { id: number | string; url: string; alt_text: string | null; display_order: number; is_primary: boolean }[];
   is_active: boolean;
   is_archived: boolean;
   created_at: string | null;
@@ -177,6 +179,7 @@ export type AdminOrderRow = {
   customer_name: string;
   fulfillment_type: string;
   status: string;
+  payment_status?: string;
   total_cents: number;
   item_count: number;
   is_demo: boolean;
@@ -205,7 +208,17 @@ export type AdminOrderDetail = AdminOrderRow & {
   items: OrderPublic["items"];
   placed_at?: string | null;
   paid_at?: string | null;
+  admin_seen_at?: string | null;
   cancelled_at?: string | null;
+};
+
+export type AdminOrderNotification = {
+  id: number;
+  order_number: string;
+  customer_name: string;
+  fulfillment_type: string;
+  total_cents: number;
+  created_at: string | null;
 };
 
 export type ProductQuery = {

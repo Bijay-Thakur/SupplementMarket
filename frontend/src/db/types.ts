@@ -263,6 +263,213 @@ export type Database = {
           },
         ]
       }
+      customer_addresses: {
+        Row: {
+          address_line1: string
+          address_line2: string | null
+          city: string
+          country_code: string
+          created_at: string
+          delivery_instructions: string | null
+          id: string
+          is_default: boolean
+          label: string | null
+          phone: string | null
+          postal_code: string
+          recipient_name: string
+          state: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_line1: string
+          address_line2?: string | null
+          city: string
+          country_code?: string
+          created_at?: string
+          delivery_instructions?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          phone?: string | null
+          postal_code: string
+          recipient_name: string
+          state: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string | null
+          city?: string
+          country_code?: string
+          created_at?: string
+          delivery_instructions?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          phone?: string | null
+          postal_code?: string
+          recipient_name?: string
+          state?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          brand_name: string | null
+          created_at: string
+          id: number
+          line_total_cents: number
+          order_id: number
+          product_id: string | null
+          product_name: string
+          quantity: number
+          sku: string | null
+          unit_price_cents: number
+        }
+        Insert: {
+          brand_name?: string | null
+          created_at?: string
+          id?: number
+          line_total_cents: number
+          order_id: number
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          sku?: string | null
+          unit_price_cents: number
+        }
+        Update: {
+          brand_name?: string | null
+          created_at?: string
+          id?: number
+          line_total_cents?: number
+          order_id?: number
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          sku?: string | null
+          unit_price_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          admin_seen_at: string | null
+          cancelled_at: string | null
+          created_at: string
+          currency: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          delivery_address_line1: string | null
+          delivery_address_line2: string | null
+          delivery_city: string | null
+          delivery_fee_cents: number | null
+          delivery_instructions: string | null
+          delivery_state: string | null
+          delivery_zip: string | null
+          fulfillment_type: string
+          id: number
+          idempotency_key: string
+          is_demo: boolean
+          notes: string | null
+          order_number: string
+          paid_at: string | null
+          payment_method: string
+          payment_status: string
+          placed_at: string
+          public_token: string
+          status: string
+          subtotal_cents: number
+          total_cents: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_seen_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          delivery_address_line1?: string | null
+          delivery_address_line2?: string | null
+          delivery_city?: string | null
+          delivery_fee_cents?: number | null
+          delivery_instructions?: string | null
+          delivery_state?: string | null
+          delivery_zip?: string | null
+          fulfillment_type: string
+          id?: number
+          idempotency_key: string
+          is_demo?: boolean
+          notes?: string | null
+          order_number: string
+          paid_at?: string | null
+          payment_method?: string
+          payment_status?: string
+          placed_at?: string
+          public_token?: string
+          status?: string
+          subtotal_cents: number
+          total_cents: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_seen_at?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string
+          delivery_address_line1?: string | null
+          delivery_address_line2?: string | null
+          delivery_city?: string | null
+          delivery_fee_cents?: number | null
+          delivery_instructions?: string | null
+          delivery_state?: string | null
+          delivery_zip?: string | null
+          fulfillment_type?: string
+          id?: number
+          idempotency_key?: string
+          is_demo?: boolean
+          notes?: string | null
+          order_number?: string
+          paid_at?: string | null
+          payment_method?: string
+          payment_status?: string
+          placed_at?: string
+          public_token?: string
+          status?: string
+          subtotal_cents?: number
+          total_cents?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_images: {
         Row: {
           alt_text: string | null
@@ -577,6 +784,30 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      submit_order_request: {
+        Args: {
+          p_customer_name: string
+          p_customer_phone: string
+          p_delivery_address_line1: string
+          p_delivery_address_line2: string
+          p_delivery_city: string
+          p_delivery_instructions: string
+          p_delivery_state: string
+          p_delivery_zip: string
+          p_fulfillment_type: string
+          p_idempotency_key: string
+          p_items: Json
+          p_user_id: string
+        }
+        Returns: number
+      }
+      delete_catalog_import: {
+        Args: {
+          p_batch_id: string
+          p_confirmation: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "customer" | "admin"

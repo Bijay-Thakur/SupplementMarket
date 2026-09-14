@@ -1,24 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/components/cart/cart-provider";
 import { Container } from "@/components/ui/container";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
-import { createOrder } from "@/lib/api/catalog";
+import { createOrder, getStoreSettings } from "@/lib/api/catalog";
 import { ApiRequestError } from "@/lib/api/client";
-import { features } from "@/lib/config/features";
+import type { OrderPublic } from "@/lib/api/types";
 import type { AuthUser } from "@/lib/auth/types";
 
 export function CheckoutForm({ user }: { user: AuthUser }) {
   const { items, subtotalCents, clear } = useCart();
-  const router = useRouter();
+  const settings = useQuery({ queryKey: ["store-settings"], queryFn: getStoreSettings });
   const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [payment, setPayment] = useState<"pay_at_pickup" | "card">("pay_at_pickup");
+  const [submittedOrder, setSubmittedOrder] = useState<OrderPublic | null>(null);
   const [saveAddress, setSaveAddress] = useState(false);
+  const idempotencyKey = useRef<string | null>(null);
   const [form, setForm] = useState({
     customer_name: user.displayName || user.fullName,
     customer_email: user.email,
@@ -29,6 +31,61 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
     address_zip: "",
     delivery_instructions: "",
   });
+
+  const storePhone = settings.data?.phone || "+1 (914) 779-3552";
+  const phoneHref = `tel:${storePhone.replace(/[^+\d]/g, "")}`;
+
+  if (submittedOrder) {
+    return (
+      <>
+        <Container className="py-12">
+          <h1 className="font-display text-3xl font-semibold">Order submitted</h1>
+          <p className="mt-3 text-[color:var(--muted)]">
+            Your reference is {submittedOrder.order_number}.
+          </p>
+        </Container>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4" role="presentation">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-call-title"
+            aria-describedby="order-call-description"
+            className="w-full max-w-md rounded-[--radius-lg] border border-[color:var(--border)] bg-surface p-6 shadow-2xl"
+          >
+            <p className="text-sm font-semibold uppercase tracking-wide text-[color:var(--brand-green)]">
+              Order request received
+            </p>
+            <h2 id="order-call-title" className="mt-2 font-display text-2xl font-semibold">
+              Please call the store
+            </h2>
+            <p id="order-call-description" className="mt-3 text-sm text-[color:var(--muted)]">
+              No online payment was taken. Call us to confirm {submittedOrder.fulfillment_type}
+              {submittedOrder.fulfillment_type === "delivery"
+                ? " and any delivery fee"
+                : " and pickup timing"}.
+            </p>
+            <p className="mt-3 text-sm">
+              Reference: <strong>{submittedOrder.order_number}</strong>
+            </p>
+            <p className="mt-2 text-sm">
+              Status: <strong>Order sent</strong>
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a href={phoneHref} className={buttonVariants({ size: "lg" })}>
+                Call {storePhone}
+              </a>
+              <Link
+                href={`/order/confirmation/${submittedOrder.public_token}`}
+                className={buttonVariants({ variant: "outline", size: "lg" })}
+              >
+                View order
+              </Link>
+            </div>
+          </section>
+        </div>
+      </>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -44,28 +101,28 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
     setError(null);
     setPending(true);
     try {
-      const idempotency_key = crypto.randomUUID();
+      if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
       const order = await createOrder({
-        idempotency_key,
+        idempotency_key: idempotencyKey.current,
         fulfillment_type: fulfillment,
-        payment_method: payment,
         customer_name: form.customer_name,
         customer_email: form.customer_email,
         customer_phone: form.customer_phone,
-        items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
-        delivery_address_line1: form.address_line1,
-        delivery_city: form.address_city,
-        delivery_state: form.address_state,
-        delivery_zip: form.address_zip,
-        delivery_instructions: form.delivery_instructions || null,
+        items: items.map((item) => ({ product_id: item.productId, quantity: item.quantity })),
+        delivery_address_line1: fulfillment === "delivery" ? form.address_line1 : "",
+        delivery_city: fulfillment === "delivery" ? form.address_city : "",
+        delivery_state: fulfillment === "delivery" ? form.address_state : "",
+        delivery_zip: fulfillment === "delivery" ? form.address_zip : "",
+        delivery_instructions:
+          fulfillment === "delivery" ? form.delivery_instructions || null : null,
       });
       try {
         sessionStorage.setItem(`bnm-order:${order.public_token}`, JSON.stringify(order));
       } catch {
         /* private browsing */
       }
-      if (saveAddress) {
-        await fetch("/api/v1/account/addresses", {
+      if (fulfillment === "delivery" && saveAddress) {
+        void fetch("/api/v1/account/addresses", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -80,10 +137,11 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
             deliveryInstructions: form.delivery_instructions,
             isDefault: false,
           }),
-        });
+        }).catch(() => undefined);
       }
       clear();
-      router.push(`/order/confirmation/${order.public_token}`);
+      idempotencyKey.current = null;
+      setSubmittedOrder(order);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not submit the order request.");
     } finally {
@@ -95,9 +153,7 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
     <Container className="py-12">
       <h1 className="font-display text-3xl font-semibold">Checkout</h1>
       <p className="mt-2 max-w-2xl rounded-[--radius] border border-dashed border-[color:var(--brand-gold)] bg-[color:var(--brand-cream)] px-4 py-3 text-sm">
-        {features.stripeEnabled
-          ? "Card payment uses Stripe Checkout. The success page does not mark an order paid until Stripe confirms it."
-          : "Online card payment is not enabled yet. Pay at pickup or submit an order request. Do not enter card numbers."}
+        Submit your order request here, then call the store to confirm it. No online payment or card information is collected.
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 grid gap-10 lg:grid-cols-[1fr_280px]">
@@ -110,7 +166,10 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
                   type="radio"
                   name="fulfillment"
                   checked={fulfillment === "pickup"}
-                  onChange={() => setFulfillment("pickup")}
+                  onChange={() => {
+                    setFulfillment("pickup");
+                    setSaveAddress(false);
+                  }}
                 />
                 Store pickup
               </label>
@@ -126,27 +185,16 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
             </div>
             {fulfillment === "delivery" && (
               <p className="mt-2 text-sm text-[color:var(--muted)]">
-                Delivery fees and eligibility require store confirmation. Submitting
-                this form requests delivery — it does not quote a final fee.
+                Delivery eligibility and fees are confirmed by the store after submission.
               </p>
             )}
           </fieldset>
 
           <fieldset className="space-y-2">
-            <legend className="font-semibold">Payment</legend>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="payment"
-                checked={payment === "pay_at_pickup"}
-                onChange={() => setPayment("pay_at_pickup")}
-              />
-              Pay at pickup / order request
-            </label>
-            <label className="flex items-center gap-2 text-[color:var(--muted)]">
-              <input type="radio" name="payment" disabled checked={false} readOnly />
-              Card (Stripe Checkout) — unavailable until payment is enabled
-            </label>
+            <legend className="font-semibold">How payment works</legend>
+            <p className="text-sm text-[color:var(--muted)]">
+              The store will confirm your order by phone. Payment is arranged directly with the store.
+            </p>
           </fieldset>
 
           <Field label="Name" required>
@@ -157,13 +205,12 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
               onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
             />
           </Field>
-          <Field label="Email" required>
+          <Field label="Account email">
             <input
-              required
+              readOnly
               type="email"
-              className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+              className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-[color:var(--brand-cream)] px-3"
               value={form.customer_email}
-              onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
             />
           </Field>
           <Field label="Phone" required>
@@ -174,72 +221,80 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
               onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
             />
           </Field>
-          <Field label="Address" required>
-            <input
-              required
-              className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
-              value={form.address_line1}
-              onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="City" required>
-              <input
-                required
-                className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
-                value={form.address_city}
-                onChange={(e) => setForm({ ...form, address_city: e.target.value })}
-              />
-            </Field>
-            <Field label="State" required>
-              <input
-                required
-                className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
-                value={form.address_state}
-                onChange={(e) => setForm({ ...form, address_state: e.target.value })}
-              />
-            </Field>
-            <Field label="ZIP" required>
-              <input
-                required
-                className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
-                value={form.address_zip}
-                onChange={(e) => setForm({ ...form, address_zip: e.target.value })}
-              />
-            </Field>
-          </div>
-          <Field label="Delivery instructions">
-            <textarea
-              className="mt-1 block min-h-20 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3 py-2"
-              value={form.delivery_instructions}
-              onChange={(e) => setForm({ ...form, delivery_instructions: e.target.value })}
-            />
-          </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
-            Save this address to my profile
-          </label>
+          {fulfillment === "delivery" ? (
+            <div className="space-y-6 rounded-[--radius-lg] border border-[color:var(--border)] bg-surface p-5">
+              <h2 className="font-semibold">Delivery address</h2>
+              <Field label="Address" required>
+               <input
+                 required
+                 className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+                value={form.address_line1}
+                onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
+               />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="City" required>
+                  <input
+                    required
+                    className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+                    value={form.address_city}
+                    onChange={(e) => setForm({ ...form, address_city: e.target.value })}
+                  />
+                </Field>
+                <Field label="State" required>
+                  <input
+                    required
+                    className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+                    value={form.address_state}
+                    onChange={(e) => setForm({ ...form, address_state: e.target.value })}
+                  />
+                </Field>
+                <Field label="ZIP" required>
+                  <input
+                    required
+                    className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+                    value={form.address_zip}
+                    onChange={(e) => setForm({ ...form, address_zip: e.target.value })}
+                  />
+                </Field>
+              </div>
+              <Field label="Delivery instructions">
+                <textarea
+                  className="mt-1 block min-h-20 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3 py-2"
+                  value={form.delivery_instructions}
+                  onChange={(e) => setForm({ ...form, delivery_instructions: e.target.value })}
+                />
+              </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
+                Save this address to my profile
+              </label>
+            </div>
+          ) : null}
           {error && <p className="text-sm text-[color:var(--danger)]">{error}</p>}
           <button type="submit" disabled={pending} className={buttonVariants({ size: "lg" })}>
-            {pending ? "Submitting…" : "Place order request"}
+            {pending ? "Submitting…" : "Submit order"}
           </button>
         </div>
 
         <aside className="h-fit rounded-[--radius-lg] border border-[color:var(--border)] bg-surface p-5 text-sm">
           <h2 className="font-semibold">Order summary</h2>
           <ul className="mt-3 space-y-2">
-            {items.map((i) => (
-              <li key={i.productId} className="flex justify-between gap-2">
+            {items.map((item) => (
+              <li key={item.productId} className="flex justify-between gap-2">
                 <span>
-                  {i.name} × {i.quantity}
+                  {item.name} × {item.quantity}
                 </span>
-                <span>{formatCents(i.unitPriceCents * i.quantity)}</span>
+                <span>{formatCents(item.unitPriceCents * item.quantity)}</span>
               </li>
             ))}
           </ul>
           <p className="mt-4 flex justify-between font-semibold">
             <span>Estimated subtotal</span>
             <span>{formatCents(subtotalCents)}</span>
+          </p>
+          <p className="mt-2 text-xs text-[color:var(--muted)]">
+            Final item prices are checked against the database when you submit.
           </p>
         </aside>
       </form>

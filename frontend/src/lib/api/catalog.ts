@@ -1,5 +1,6 @@
 import { apiFetch, toQuery } from "./client";
 import type {
+  AdminOrderNotification,
   AdminOrderDetail,
   AdminOrderRow,
   AdminProductRow,
@@ -168,10 +169,27 @@ export function adminGetOrder(id: number) {
   return apiFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}`);
 }
 
-export function adminUpdateOrderStatus(id: number, status: string) {
+export function adminUpdateOrderStatus(
+  id: number,
+  status?: string,
+  paymentStatus?: string,
+) {
   return apiFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, payment_status: paymentStatus }),
+  });
+}
+
+export function adminOrderNotifications() {
+  return apiFetch<{ items: AdminOrderNotification[]; unread_count: number }>(
+    "/api/v1/admin/order-notifications",
+  );
+}
+
+export function adminMarkOrderNotificationSeen(id: number) {
+  return apiFetch<{ ok: boolean }>(`/api/v1/admin/order-notifications/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({}),
   });
 }
 

@@ -15,6 +15,7 @@ import type {
   ProductQuery,
 } from "@/lib/api/types";
 import { PUBLIC_VARIANT_COLUMNS } from "./public-variant-columns";
+import { orderDashboardSummary } from "./supabase-orders";
 
 function mediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -277,13 +278,14 @@ export async function dashboard() {
   const client = getSupabaseAdminClient();
   if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
 
-  const [productsRes, brandsRes, categoriesRes, imagesRes, batchesRes, variantsRes] = await Promise.all([
+  const [productsRes, brandsRes, categoriesRes, imagesRes, batchesRes, variantsRes, orders] = await Promise.all([
     client.from("products").select("id,status,is_new"),
     client.from("brands").select("id", { count: "exact", head: true }),
     client.from("categories").select("id", { count: "exact", head: true }),
     client.from("product_images").select("product_id"),
     client.from("catalog_import_batches").select("id", { count: "exact", head: true }),
     client.from("product_variants").select("product_id,regular_price_cents,sale_price_cents"),
+    orderDashboardSummary(),
   ]);
 
   const rows = productsRes.data ?? [];
@@ -310,8 +312,8 @@ export async function dashboard() {
     recent_import_count: batchesRes.count ?? 0,
     out_of_stock: 0,
     new_products: live.filter((row) => Boolean(row.is_new)).length,
-    total_orders: 0,
-    recent_orders: [],
+    total_orders: orders.total,
+    recent_orders: orders.recent,
     persistence: "database" as const,
   };
 }

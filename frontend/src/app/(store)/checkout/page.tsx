@@ -16,7 +16,7 @@ export default async function CheckoutPage() {
         <h1 className="font-display text-3xl font-semibold">Sign in to place an order</h1>
         <p className="mt-3 text-sm text-[color:var(--muted)]">
           You can browse products without an account. To place an order, sign in
-          or create an account, then provide a phone number and address.
+          or create an account, then provide a phone number. An address is only required for delivery.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href="/auth/sign-in?next=/checkout" className={buttonVariants()}>

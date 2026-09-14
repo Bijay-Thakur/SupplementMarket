@@ -17,9 +17,12 @@ describe("Vercel backend boundary", () => {
 
   it("keeps service credentials server-only", () => {
     const serverEnv = read("src/lib/env/server.ts");
+    const publicEnv = read("src/lib/env/public.ts");
     const proxy = read("src/lib/admin/fastapi-proxy.ts");
     expect(serverEnv).toContain("NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY");
     expect(serverEnv).toContain("must never be prefixed with NEXT_PUBLIC_");
+    expect(publicEnv).toContain('value.startsWith("sb_secret_")');
+    expect(publicEnv).toContain('jwtRole(value) === "service_role"');
     expect(proxy).toContain("getVerifiedAccessToken");
     expect(proxy).toContain("requireAdmin");
     expect(proxy).toContain('createHmac("sha256"');

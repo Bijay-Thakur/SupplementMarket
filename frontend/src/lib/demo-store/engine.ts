@@ -727,6 +727,7 @@ function toAdminOrderRow(o: AdminOrderDetail): AdminOrderRow {
     customer_name: o.customer_name,
     fulfillment_type: o.fulfillment_type,
     status: o.status,
+    payment_status: o.payment_status,
     total_cents: o.total_cents,
     item_count: o.items.reduce((n, i) => n + i.quantity, 0),
     is_demo: o.is_demo,
@@ -746,7 +747,7 @@ function toPublicOrder(o: AdminOrderDetail): OrderPublic {
     total_cents: o.total_cents,
     items: o.items,
     created_at: o.created_at,
-    payment_method: o.payment_method ?? "pay_at_pickup",
+    payment_method: o.payment_method ?? "call_store",
     payment_status: o.payment_status ?? "unpaid",
     currency: o.currency ?? "USD",
     persistence: "session",
@@ -770,19 +771,21 @@ export function createOrder(body: Record<string, unknown>) {
   if (!body.user_id) {
     throw new ApiHttpError(401, "Sign in is required.", "unauthorized");
   }
-  const paymentMethod = body.payment_method === "card" ? "card" : "pay_at_pickup";
+  const paymentMethod = body.payment_method === "card" ? "card" : "call_store";
   if (paymentMethod === "card") {
     throw new ApiHttpError(
       400,
-      "Online card payment is not available yet. Choose pay at pickup or submit an order request.",
+      "Online payment is not available. Submit the order and call the store.",
       "payment_disabled",
     );
   }
   const missing: Record<string, string> = {};
-  if (!body.delivery_address_line1) missing.delivery_address_line1 = "Address is required.";
-  if (!body.delivery_city) missing.delivery_city = "City is required.";
-  if (!body.delivery_state) missing.delivery_state = "State is required.";
-  if (!body.delivery_zip) missing.delivery_zip = "ZIP is required.";
+  if (fulfillment === "delivery") {
+    if (!body.delivery_address_line1) missing.delivery_address_line1 = "Address is required.";
+    if (!body.delivery_city) missing.delivery_city = "City is required.";
+    if (!body.delivery_state) missing.delivery_state = "State is required.";
+    if (!body.delivery_zip) missing.delivery_zip = "ZIP is required.";
+  }
   if (Object.keys(missing).length) {
     throw new ApiHttpError(400, "Address and phone are required before placing an order.", "validation", missing);
   }
@@ -826,7 +829,7 @@ export function createOrder(body: Record<string, unknown>) {
     delivery_state: (body.delivery_state as string) ?? null,
     delivery_zip: (body.delivery_zip as string) ?? null,
     delivery_instructions: (body.delivery_instructions as string) ?? null,
-    payment_method: "pay_at_pickup",
+    payment_method: "call_store",
     payment_status: "unpaid",
     currency: "USD",
     user_id: typeof body.user_id === "string" ? body.user_id : null,
@@ -886,13 +889,30 @@ export function getAdminOrder(id: number) {
   return o;
 }
 
-export function updateOrderStatus(id: number, status: string) {
-  const allowed = ["placed", "confirmed", "ready", "completed", "cancelled"];
-  if (!allowed.includes(status)) {
+export function updateOrderStatus(id: number, status?: string, paymentStatus?: string) {
+  const allowed = ["placed", "confirmed", "preparing", "ready_for_pickup", "shipped", "out_for_delivery", "delivered", "completed", "cancelled"];
+  if (status !== undefined && !allowed.includes(status)) {
     throw new ApiHttpError(400, `Invalid status. Allowed: ${allowed.join(", ")}`, "validation");
   }
+  if (paymentStatus !== undefined && !["unpaid", "paid"].includes(paymentStatus)) {
+    throw new ApiHttpError(400, "Invalid payment status.", "validation");
+  }
+  if (status === undefined && paymentStatus === undefined) {
+    throw new ApiHttpError(400, "Choose an order or payment status.", "validation");
+  }
   const o = getAdminOrder(id);
-  o.status = status;
+  const nextStatus = status ?? o.status;
+  if (
+    (o.fulfillment_type === "pickup" && ["shipped", "out_for_delivery", "delivered"].includes(nextStatus)) ||
+    (o.fulfillment_type === "delivery" && nextStatus === "ready_for_pickup")
+  ) {
+    throw new ApiHttpError(400, "That status does not match the order fulfillment type.", "validation");
+  }
+  if (status !== undefined) o.status = status;
+  if (paymentStatus !== undefined) {
+    o.payment_status = paymentStatus;
+    o.paid_at = paymentStatus === "paid" ? new Date().toISOString() : null;
+  }
   return o;
 }
 

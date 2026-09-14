@@ -37,7 +37,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<your secret service-role key>
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is server-only. Never create a variable named `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`. Leave `FASTAPI_ORIGIN`, `NEXT_PUBLIC_API_URL`, and `USE_FASTAPI` unset on Vercel; the server automatically calls the same deployment's private `/api/backend` function.
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. A newer `SUPABASE_SECRET_KEY` may be used instead, but configure only one and mark it Sensitive in Vercel. Never prefix either secret with `NEXT_PUBLIC_`. Leave `FASTAPI_ORIGIN`, `NEXT_PUBLIC_API_URL`, and `USE_FASTAPI` unset on Vercel; the server automatically calls the same deployment's private `/api/backend` function.
 
 In Supabase Authentication URL Configuration, set the Site URL to the production domain and allow `https://your-domain.example/auth/callback` as a redirect URL. Add each Vercel preview callback only if you intend to test authentication on previews.
 
@@ -50,7 +50,7 @@ In Supabase Authentication URL Configuration, set the Site URL to the production
 
 Customer and administrator sessions use Supabase Auth cookies. Admin APIs verify the access token and then independently require `public.user_roles.role = 'admin'`; choosing an interface or changing browser storage does not grant access.
 
-Card payment is implemented behind `PAYMENT_PROVIDER=disabled`. Do not enter card numbers.
+Online payment is disabled. Signed-in customers submit a server-priced order request, then call the store to confirm it; administrators manage the same durable orders from the Orders tab.
 
 ## What’s in the catalog
 

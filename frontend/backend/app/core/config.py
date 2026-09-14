@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     next_public_supabase_publishable_key: str = ""
     next_public_supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
+    supabase_secret_key: str = ""
     admin_internal_secret: str = ""
     fastapi_max_csv_bytes: int = 10_000_000
 
@@ -104,11 +105,16 @@ class Settings(BaseSettings):
     def admin_proxy_secret(self) -> str:
         # ADMIN_INTERNAL_SECRET is preferred. The service-role key is already a
         # server-only shared secret and is a safe fallback during deployment.
-        return self.admin_internal_secret.strip() or self.supabase_service_role_key.strip()
+        return self.admin_internal_secret.strip() or self.supabase_admin_key
+
+    @property
+    def supabase_admin_key(self) -> str:
+        """Legacy service-role JWT or the newer server-only Supabase secret key."""
+        return self.supabase_service_role_key.strip() or self.supabase_secret_key.strip()
 
     @property
     def supabase_configured(self) -> bool:
-        return bool(self.supabase_rest_url and self.supabase_service_role_key)
+        return bool(self.supabase_rest_url and self.supabase_admin_key)
 
     @property
     def supabase_auth_configured(self) -> bool:

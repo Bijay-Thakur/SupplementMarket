@@ -61,6 +61,35 @@ if (!parsed.success) {
 
 const data = parsed.data;
 
+function jwtRole(key: string): string | null {
+  if (!key.startsWith("eyJ")) return null;
+  try {
+    const segment = key.split(".")[1];
+    if (!segment) return null;
+    const base64 = segment
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(segment.length / 4) * 4, "=");
+    const payload = JSON.parse(globalThis.atob(base64)) as { role?: unknown };
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function assertBrowserSafeKey(name: string, key: string | undefined): void {
+  const value = key?.trim() || "";
+  if (value.startsWith("sb_secret_") || jwtRole(value) === "service_role") {
+    throw new Error(`${name} contains a server-only Supabase key. Remove it immediately.`);
+  }
+}
+
+assertBrowserSafeKey(
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  data.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+);
+assertBrowserSafeKey("NEXT_PUBLIC_SUPABASE_ANON_KEY", data.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 function pickSupabaseBrowserKey(env: {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
   NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;

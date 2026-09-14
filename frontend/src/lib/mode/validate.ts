@@ -38,7 +38,7 @@ export function validateRuntimeMode(input: RuntimeModeInput): string[] {
   );
 
   if (input.dataProvider === "supabase" && !supabaseReady) {
-    errors.push("DATA_PROVIDER=supabase requires NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY.");
+    errors.push("DATA_PROVIDER=supabase requires NEXT_PUBLIC_SUPABASE_URL, a browser publishable/anon key, and a server-only Supabase service-role/secret key.");
   }
   if (input.nodeEnv === "production" && input.dataProvider !== "supabase") {
     errors.push("Production requires DATA_PROVIDER=supabase; the bundled snapshot is development-only.");

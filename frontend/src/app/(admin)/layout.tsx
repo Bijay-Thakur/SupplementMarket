@@ -4,6 +4,7 @@ import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
 import { Logo } from "@/components/layout/logo";
 import { requireAdmin } from "@/lib/auth/server";
 import { SignOutForm } from "@/components/auth/sign-out-form";
+import { AdminOrderNotifications } from "@/components/admin/admin-order-notifications";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -49,6 +50,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </div>
         <main id="main-content" className="flex-1 p-4 md:p-8">
+          <div className="mb-4 flex justify-end">
+            <AdminOrderNotifications />
+          </div>
           {children}
         </main>
       </div>

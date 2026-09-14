@@ -271,6 +271,7 @@ describe("orders require a signed-in customer with address and phone", () => {
     expect(() =>
       createOrder({
         user_id: "00000000-0000-4000-a000-000000000001",
+        fulfillment_type: "delivery",
         customer_name: "Guest",
         customer_email: "g@example.com",
         customer_phone: "555-0100",

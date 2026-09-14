@@ -8,6 +8,7 @@ granted to the authenticated PostgREST role for public/customer reads.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -29,8 +30,8 @@ def _headers(*, prefer: str | None = None) -> dict[str, str]:
     if not settings.supabase_configured:
         raise ValidationError("Supabase is not configured.")
     headers = {
-        "apikey": settings.supabase_service_role_key,
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": settings.supabase_admin_key,
+        "Authorization": f"Bearer {settings.supabase_admin_key}",
         "Content-Type": "application/json",
     }
     if prefer:
@@ -94,13 +95,24 @@ def update(table: str, match: dict[str, str], row: dict[str, Any]) -> dict[str, 
     return data
 
 
+def delete(table: str, match: dict[str, str]) -> None:
+    request("DELETE", f"/rest/v1/{table}", params=match, prefer="return=minimal")
+
+
+def rpc(function: str, payload: dict[str, Any]) -> Any:
+    """Call a service-role-only Postgres function through PostgREST."""
+    if not function or not function.replace("_", "").isalnum():
+        raise ValidationError("Invalid database function name.")
+    return request("POST", f"/rest/v1/rpc/{function}", json=payload, prefer=None)
+
+
 def upload_object(bucket: str, object_path: str, content: bytes, content_type: str) -> str:
     url = f"{settings.supabase_rest_url}/storage/v1/object/{bucket}/{object_path}"
     response = _CLIENT.post(
         url,
         headers={
-            "apikey": settings.supabase_service_role_key,
-            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "apikey": settings.supabase_admin_key,
+            "Authorization": f"Bearer {settings.supabase_admin_key}",
             "Content-Type": content_type,
             "x-upsert": "true",
         },
@@ -110,3 +122,18 @@ def upload_object(bucket: str, object_path: str, content: bytes, content_type: s
     if response.status_code >= 400:
         raise SupabaseRestError("Image storage is unavailable.")
     return f"{settings.supabase_rest_url}/storage/v1/object/public/{bucket}/{object_path}"
+
+
+def delete_object(bucket: str, object_path: str) -> None:
+    """Remove one known object without allowing path or bucket traversal."""
+    safe_bucket = quote(bucket, safe="")
+    safe_path = quote(object_path.lstrip("/"), safe="/")
+    if not safe_bucket or not safe_path or safe_path.startswith("../") or "/../" in safe_path:
+        raise ValidationError("Invalid storage object path.")
+    response = _CLIENT.delete(
+        f"{settings.supabase_rest_url}/storage/v1/object/{safe_bucket}/{safe_path}",
+        headers=_headers(prefer=None),
+        timeout=30.0,
+    )
+    if response.status_code not in {200, 204, 404}:
+        raise SupabaseRestError("Image storage cleanup failed.")

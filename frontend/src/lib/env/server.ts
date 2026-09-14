@@ -5,6 +5,7 @@ import { assertRuntimeMode, type AuthProvider, type DataProvider, type PaymentPr
 
 const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_SECRET_KEY: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STORE_TIMEZONE: z.string().min(1).default("America/New_York"),
@@ -20,6 +21,7 @@ const serverSchema = z.object({
 
 const parsed = serverSchema.safeParse({
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STORE_TIMEZONE: process.env.STORE_TIMEZONE,
@@ -43,6 +45,8 @@ if (!parsed.success) {
 }
 
 const data = parsed.data;
+const supabaseAdminKey =
+  data.SUPABASE_SERVICE_ROLE_KEY?.trim() || data.SUPABASE_SECRET_KEY?.trim() || undefined;
 
 function fastapiOrigin() {
   // The generated VERCEL_URL can be protected by Vercel Authentication even
@@ -86,7 +90,7 @@ assertRuntimeMode({
   stripeEnabledPublic: publicEnv.stripeEnabled,
   supabaseUrl: publicEnv.supabaseUrl,
   supabaseAnonKey: publicEnv.supabaseAnonKey,
-  supabaseServiceRoleKey: data.SUPABASE_SERVICE_ROLE_KEY,
+  supabaseServiceRoleKey: supabaseAdminKey,
   stripeSecretKey: data.STRIPE_SECRET_KEY,
   stripeWebhookSecret: data.STRIPE_WEBHOOK_SECRET,
   stripePublishableKey: publicEnv.stripePublishableKey,
@@ -96,7 +100,9 @@ assertRuntimeMode({
 
 export const serverEnv = {
   ...publicEnv,
-  supabaseServiceRoleKey: data.SUPABASE_SERVICE_ROLE_KEY || undefined,
+  // Kept under the existing property name for call-site compatibility. It may
+  // contain either a legacy service-role JWT or a newer server-only secret key.
+  supabaseServiceRoleKey: supabaseAdminKey,
   stripeSecretKey: data.STRIPE_SECRET_KEY || undefined,
   stripeWebhookSecret: data.STRIPE_WEBHOOK_SECRET || undefined,
   storeTimezone: data.STORE_TIMEZONE,

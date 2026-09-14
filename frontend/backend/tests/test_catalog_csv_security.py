@@ -259,6 +259,7 @@ def test_excluding_one_file_duplicate_revalidates_the_remaining_row(monkeypatch)
 
     monkeypatch.setattr(settings, "next_public_supabase_url", "")
     monkeypatch.setattr(settings, "supabase_service_role_key", "")
+    monkeypatch.setattr(settings, "supabase_secret_key", "")
     preview = ci.preview_csv(
         (
             "product_full_name,brand,sku,msrp\n"
@@ -410,8 +411,68 @@ def test_public_admin_payload_hides_cost_when_requested() -> None:
                 }
             ],
             "product_images": [],
+            "product_tags": [],
         },
         include_cost=False,
     )
     assert "cost_price_cents" not in payload
     assert payload["regular_price_cents"] == 1999
+    assert payload["effective_price_cents"] == 1999
+    assert payload["on_sale"] is False
+    assert payload["dietary"]["vegan"] is False
+    assert payload["search_aliases"] == []
+    assert payload["images"] == []
+
+
+def test_import_delete_requires_exact_confirmation(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    class NeverCalled:
+        def __getattr__(self, _name):
+            raise AssertionError("database must not be called without exact confirmation")
+
+    monkeypatch.setattr(ci, "sb", NeverCalled())
+    with pytest.raises(ValidationError, match="Type CONFIRM"):
+        ci.delete_batch("00000000-0000-4000-a000-000000000001", "confirm")
+
+
+def test_import_delete_only_targets_inserted_product_images(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    batch_id = "00000000-0000-4000-a000-000000000001"
+    deleted_objects: list[tuple[str, str]] = []
+    calls: list[tuple[str, dict]] = []
+
+    class DummySb:
+        @staticmethod
+        def select(table, params):
+            if table == "catalog_import_batches":
+                return [{"id": batch_id, "status": "completed"}]
+            if table == "catalog_import_rows":
+                return [
+                    {"detected_action": "insert", "committed_product_id": "00000000-0000-4000-a000-000000000010"},
+                    {"detected_action": "update", "committed_product_id": "00000000-0000-4000-a000-000000000020"},
+                ]
+            if table == "product_images":
+                assert "00000000-0000-4000-a000-000000000010" in params["product_id"]
+                assert "00000000-0000-4000-a000-000000000020" not in params["product_id"]
+                return [{"storage_path": "biosil/product/image.png"}]
+            return []
+
+        @staticmethod
+        def rpc(function, payload):
+            calls.append((function, payload))
+            return {"ok": True, "deleted_products": 1, "retained_updated_products": 1}
+
+        @staticmethod
+        def delete_object(bucket, object_path):
+            deleted_objects.append((bucket, object_path))
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    result = ci.delete_batch(batch_id, "CONFIRM")
+
+    assert calls == [("delete_catalog_import", {"p_batch_id": batch_id, "p_confirmation": "CONFIRM"})]
+    assert deleted_objects == [("product-images", "biosil/product/image.png")]
+    assert result["deleted_products"] == 1
+    assert result["retained_updated_products"] == 1
+    assert result["deleted_image_objects"] == 1

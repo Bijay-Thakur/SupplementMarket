@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Container } from "@/components/ui/container";
 import type { OrderPublic } from "@/lib/api/types";
 import { formatCents } from "@/lib/money";
+import { orderStatusLabel, paymentStatusLabel } from "@/lib/orders/status";
 
 export default function AccountOrdersPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function AccountOrdersPage() {
                 {o.order_number}
               </Link>
               <p className="text-[color:var(--muted)]">
-                {o.status} · {o.fulfillment_type} · {o.payment_status ?? "unpaid"} · {formatCents(o.total_cents)}
+                {orderStatusLabel(o.status)} · {o.fulfillment_type} · {paymentStatusLabel(o.payment_status)} · {formatCents(o.total_cents)}
               </p>
             </li>
           ))}

@@ -81,14 +81,24 @@ export function ProductEditor({ productId }: Props) {
   useEffect(() => {
     const p = existing.data;
     if (!p) return;
+    const dietary = p.dietary ?? {
+      vegan: false,
+      vegetarian: false,
+      organic: false,
+      gluten_free: false,
+      soy_free: false,
+      dairy_free: false,
+      alcohol_free: false,
+      non_gmo: false,
+    };
     // Hydrate the editor from the loaded product. Intentional one-way sync.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((f) => ({
       ...f,
-      name: p.name,
-      sku: p.sku,
+      name: p.name ?? "",
+      sku: p.sku ?? "",
       upc: p.upc ?? "",
-      supplier_sku: "",
+      supplier_sku: p.supplier_sku ?? "",
       brand_id: p.brand_id ?? f.brand_id,
       category_id: p.category_id ?? f.category_id,
       short_description: p.short_description ?? "",
@@ -98,29 +108,30 @@ export function ProductEditor({ productId }: Props) {
       count: p.count != null ? String(p.count) : "",
       strength_value: p.strength_value != null ? String(p.strength_value) : "",
       strength_unit: p.strength_unit ?? "mg",
-      regular: (p.regular_price_cents / 100).toFixed(2),
+      regular: (Number(p.regular_price_cents ?? 0) / 100).toFixed(2),
       sale: p.sale_price_cents != null ? (p.sale_price_cents / 100).toFixed(2) : "",
+      cost: p.cost_price_cents != null ? (p.cost_price_cents / 100).toFixed(2) : "",
       percent: p.discount_percent != null ? String(p.discount_percent) : "",
-      availability: p.availability,
-      is_active: p.is_active,
-      is_featured: p.is_featured,
-      is_bestseller: p.is_bestseller,
-      is_new: p.is_new,
-      vegan: p.dietary.vegan,
-      vegetarian: p.dietary.vegetarian,
-      organic: p.dietary.organic,
-      gluten_free: p.dietary.gluten_free,
-      soy_free: p.dietary.soy_free,
-      dairy_free: p.dietary.dairy_free,
-      alcohol_free: p.dietary.alcohol_free,
-      non_gmo: p.dietary.non_gmo,
-      search_aliases: p.search_aliases.join(", "),
+      availability: p.availability ?? "in_stock",
+      is_active: Boolean(p.is_active),
+      is_featured: Boolean(p.is_featured),
+      is_bestseller: Boolean(p.is_bestseller),
+      is_new: Boolean(p.is_new),
+      vegan: dietary.vegan,
+      vegetarian: dietary.vegetarian,
+      organic: dietary.organic,
+      gluten_free: dietary.gluten_free,
+      soy_free: dietary.soy_free,
+      dairy_free: dietary.dairy_free,
+      alcohol_free: dietary.alcohol_free,
+      non_gmo: dietary.non_gmo,
+      search_aliases: Array.isArray(p.search_aliases) ? p.search_aliases.join(", ") : "",
       ingredient_highlights: p.ingredient_highlights ?? "",
       usage_text: p.usage_text ?? "",
       warnings: p.warnings ?? f.warnings,
-      is_demo: p.is_demo,
+      is_demo: Boolean(p.is_demo),
     }));
-  }, [existing.data, brands.data, cats.data]);
+  }, [existing.data]);
 
   useEffect(() => {
     const onLeave = (e: BeforeUnloadEvent) => {
@@ -233,6 +244,12 @@ export function ProductEditor({ productId }: Props) {
       <h1 className="font-display text-3xl font-semibold">
         {productId ? "Edit product" : "New product"}
       </h1>
+      {existing.isLoading && productId && <p className="text-sm text-[color:var(--muted)]">Loading product…</p>}
+      {existing.isError && (
+        <p className="rounded-[--radius] border border-[color:var(--danger)] px-3 py-2 text-sm text-[color:var(--danger)]">
+          This product could not be loaded. Refresh the page and try again.
+        </p>
+      )}
       {form.is_demo && (
         <p className="rounded-[--radius] border border-dashed border-[color:var(--brand-gold)] bg-[color:var(--brand-cream)] px-3 py-2 text-sm">
           This record is demonstration data — not verified store inventory.

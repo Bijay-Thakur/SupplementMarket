@@ -937,3 +937,82 @@ def get_batch(batch_id: str) -> dict[str, Any]:
         raise NotFoundError("Import batch not found.")
     rows = sb.select("catalog_import_rows", {"select": "*", "batch_id": f"eq.{batch_id}", "order": "source_row_number.asc"})
     return {**found[0], "rows": rows}
+
+
+def delete_batch(batch_id: str, confirmation: str) -> dict[str, Any]:
+    """Delete a staging batch and only the catalog products it originally inserted.
+
+    Products that existed before the import are deliberately retained even when
+    the batch updated them; deleting those records would destroy catalog data the
+    batch did not create. The database function performs the destructive portion
+    atomically and re-checks the typed confirmation and batch state.
+    """
+    if confirmation != "CONFIRM":
+        raise ValidationError("Type CONFIRM to delete this import.")
+    try:
+        normalized_batch_id = str(uuid.UUID(batch_id))
+    except (TypeError, ValueError, AttributeError):
+        raise ValidationError("Invalid import batch identifier.") from None
+
+    batches = sb.select(
+        "catalog_import_batches",
+        {"select": "id,status", "id": f"eq.{normalized_batch_id}", "limit": "1"},
+    )
+    if not batches:
+        raise NotFoundError("Import batch not found.")
+    if batches[0].get("status") == "processing":
+        raise ConflictError("An import cannot be deleted while it is processing.")
+
+    rows = sb.select(
+        "catalog_import_rows",
+        {
+            "select": "committed_product_id,detected_action",
+            "batch_id": f"eq.{normalized_batch_id}",
+        },
+    )
+    inserted_product_ids = sorted(
+        {
+            str(row["committed_product_id"])
+            for row in rows
+            if row.get("detected_action") == "insert" and row.get("committed_product_id")
+        }
+    )
+    storage_paths: list[str] = []
+    if inserted_product_ids:
+        images = sb.select(
+            "product_images",
+            {
+                "select": "storage_path",
+                "product_id": f"in.({','.join(inserted_product_ids)})",
+            },
+        )
+        storage_paths = [
+            str(image["storage_path"])
+            for image in images
+            if image.get("storage_path")
+            and not str(image["storage_path"]).startswith(("http://", "https://"))
+        ]
+
+    result = sb.rpc(
+        "delete_catalog_import",
+        {"p_batch_id": normalized_batch_id, "p_confirmation": confirmation},
+    )
+    _BATCHES.pop(normalized_batch_id, None)
+
+    failed_storage_cleanup = 0
+    for object_path in storage_paths:
+        try:
+            sb.delete_object("product-images", object_path)
+        except Exception:
+            # The database transaction is authoritative. A stale object is not
+            # allowed to make the already-completed deletion appear to fail.
+            failed_storage_cleanup += 1
+
+    payload = result if isinstance(result, dict) else {"ok": True, "batch_id": normalized_batch_id}
+    payload["deleted_image_objects"] = len(storage_paths) - failed_storage_cleanup
+    if failed_storage_cleanup:
+        payload["warning"] = (
+            f"The import was deleted, but {failed_storage_cleanup} unreferenced image "
+            "object(s) could not be removed from storage."
+        )
+    return payload
