@@ -16,7 +16,7 @@ export async function StoreShell({ children }: { children: React.ReactNode }) {
   return (
     <CartProvider>
       <SiteHeader />
-      <main id="main-content" className="flex-1">
+      <main id="main-content" className="min-w-0 max-w-full flex-1">
         {children}
       </main>
       <SiteFooter />

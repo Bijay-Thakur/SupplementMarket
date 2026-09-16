@@ -118,6 +118,33 @@ def test_direct_headers_parse_store_price_and_availability() -> None:
     assert product["availability"] == "low_stock"
 
 
+def test_vendor_active_availability_and_forms_are_normalized() -> None:
+    csv = (
+        "product_full_name,brand,upc,msrp,availability,size,form\n"
+        "Fungal Defense,Garden of Life,658010111393,48.99,Active,84,Caplet\n"
+        "MCT Oil,Garden of Life,658010122221,25.99,Active,16oz,Oil\n"
+        "Organic Fruit Gummies,Garden of Life,658010120753,37.99,Active,120,Count\n"
+        "Two-item bundle,Garden of Life,5425018611058,86.99,Discontinued,2,Pack\n"
+    ).encode()
+    result = parse_catalog_csv(csv)
+    assert [product["availability"] for product in result["products"]] == [
+        "in_stock",
+        "in_stock",
+        "in_stock",
+        "discontinued",
+    ]
+    assert [product["form"] for product in result["products"]] == [
+        "tablet",
+        "liquid",
+        "gummy",
+        "other",
+    ]
+    assert [product["unit_count"] for product in result["products"]] == [84, None, 120, None]
+    assert result["products"][1]["size_value"] == 16
+    assert result["products"][1]["size_unit"] == "oz"
+    assert all(product["errors"] == [] for product in result["products"])
+
+
 def test_only_main_fields_are_required_and_optional_values_stay_empty() -> None:
     result = parse_catalog_csv(
         (
@@ -304,10 +331,12 @@ def test_optional_image_failure_does_not_raise(monkeypatch) -> None:
         def select(self, *_args, **_kwargs):
             return []
 
+        def insert(self, *_args, **_kwargs):
+            raise RuntimeError("storage unavailable")
+
     monkeypatch.setattr(ci, "sb", DummySb())
-    monkeypatch.setattr(ci, "download_product_image", lambda _url: None)
     row = {"image_url": "https://example.com/a.jpg", "warnings": []}
-    ci._try_attach_image(row, "vital-planet", "zinc", "product-id")
+    ci._try_attach_image(row, "product-id")
     assert any("without an image" in w for w in row["warnings"])
 
 

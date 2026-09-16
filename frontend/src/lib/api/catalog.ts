@@ -54,8 +54,21 @@ export function productSuggestions(q: string) {
   );
 }
 
-export function getFilters() {
-  return apiFetch<FilterOptions>("/api/v1/products/filters");
+export function getFilters(q: ProductQuery = {}) {
+  return apiFetch<FilterOptions>(
+    `/api/v1/products/filters${toQuery({
+      q: q.q,
+      brand: q.brand,
+      category: q.category,
+      form: q.form,
+      availability: q.availability,
+      dietary: q.dietary,
+      featured: q.featured,
+      bestseller: q.bestseller,
+      is_new: q.is_new,
+      on_sale: q.on_sale,
+    })}`,
+  );
 }
 
 export function listBrands() {
@@ -186,11 +199,26 @@ export function adminUpdateOrderStatus(
   id: number,
   status?: string,
   paymentStatus?: string,
+  bypassPaymentRequirement = false,
 ) {
   return apiFetch<AdminOrderDetail>(`/api/v1/admin/orders/${id}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status, payment_status: paymentStatus }),
+    body: JSON.stringify({
+      status,
+      payment_status: paymentStatus,
+      bypass_payment_requirement: bypassPaymentRequirement,
+    }),
   });
+}
+
+export function adminDeleteOrder(id: number, confirmation: string) {
+  return apiFetch<{ ok: boolean; order_id: number; order_number: string }>(
+    `/api/v1/admin/orders/${id}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation }),
+    },
+  );
 }
 
 export function adminOrderNotifications() {

@@ -20,6 +20,10 @@ const brandDiscountSql = readFileSync(
   path.join(process.cwd(), "../supabase/migrations/20260909010000_brand_discounts.sql"),
   "utf8",
 );
+const roundedDiscountSql = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260916130000_round_discount_prices_to_99.sql"),
+  "utf8",
+);
 
 describe("committed supabase catalog migrations", () => {
   it("enables RLS and keeps catalog writes off public roles", () => {
@@ -41,6 +45,9 @@ describe("committed supabase catalog migrations", () => {
     expect(brandDiscountSql).toMatch(/product_variants_apply_brand_discount/i);
     expect(brandDiscountSql).toMatch(/products_sync_brand_discount_prices/i);
     expect(brandDiscountSql).toMatch(/round\([\s\S]*regular_price_cents[\s\S]*100 - [\s\S]*discount_percent/i);
+    expect(roundedDiscountSql).toMatch(/round_store_price_to_99/i);
+    expect(roundedDiscountSql).toMatch(/brand_discount_sale_price/i);
+    expect(roundedDiscountSql).toMatch(/mod\(p_price_cents, 100\) < 50/i);
   });
 });
 

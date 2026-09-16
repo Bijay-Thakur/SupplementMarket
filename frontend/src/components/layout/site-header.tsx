@@ -16,11 +16,11 @@ export async function SiteHeader() {
   const guest = !user;
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-surface/95 backdrop-blur">
-      <Container className="flex h-16 items-center gap-4 lg:h-20">
-        <Logo />
+      <Container className="flex h-16 min-w-0 items-center gap-2 sm:gap-4 xl:h-20">
+        <Logo className="shrink-0" />
 
         <nav
-          className="ml-4 hidden items-center gap-1 lg:flex"
+          className="ml-2 hidden shrink-0 items-center gap-1 xl:flex"
           aria-label="Primary"
         >
           {PRIMARY_NAV.map((item) => (
@@ -34,17 +34,17 @@ export async function SiteHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto hidden max-w-xs flex-1 md:block">
+        <div className="ml-auto hidden min-w-0 max-w-xs flex-1 md:block">
           <Suspense fallback={<SearchFallback />}>
             <HeaderSearch />
           </Suspense>
         </div>
 
-        <div className="ml-auto flex items-center gap-1 md:ml-2">
-          {user ? <CartLink /> : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-2">
+          <CartLink />
           <AuthNav />
           {guest ? (
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <SwitchExperienceButton />
             </div>
           ) : null}

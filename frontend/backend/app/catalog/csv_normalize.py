@@ -19,10 +19,12 @@ FORM_MAP: tuple[tuple[str, str], ...] = (
     ("fish gel", "softgel"),
     ("chewable tablet", "tablet"),
     ("chewable", "tablet"),
+    ("caplet", "tablet"),
     ("tablet", "tablet"),
     ("soft chew", "other"),
     ("powder", "powder"),
     ("liquid", "liquid"),
+    ("oil", "liquid"),
     ("gummy", "gummy"),
     ("lozenge", "lozenge"),
     ("spray", "spray"),
@@ -148,7 +150,9 @@ def parse_strength(name: str, explicit: str = "") -> dict[str, Any]:
 
 
 def sale_from_discount(regular_cents: int, percent: int) -> int:
-    return int(round(regular_cents * (1 - percent / 100)))
+    from app.services.pricing import sale_price_from_percent
+
+    return sale_price_from_percent(regular_cents, percent)
 
 
 def slugify(value: str) -> str:

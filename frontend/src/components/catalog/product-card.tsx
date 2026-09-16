@@ -16,22 +16,22 @@ export function ProductCard({ product }: { product: ProductListItem }) {
   const purchasable = canAddToCart(product.availability);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-[--radius-lg] border border-[color:var(--border)] bg-surface shadow-[var(--shadow-card)]">
-      <Link href={`/products/${product.slug}`} className="block">
+    <article className="flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-[--radius-lg] border border-[color:var(--border)] bg-surface shadow-[var(--shadow-card)]">
+      <Link href={`/products/${product.slug}`} className="block min-w-0 max-w-full">
         <ProductThumb
           src={product.primary_image_url}
           alt={product.name}
           className="aspect-square w-full object-cover"
         />
       </Link>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--brand-green-strong)]">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+        <p className="break-words text-xs font-medium uppercase tracking-wide text-[color:var(--brand-green-strong)]">
           {product.brand_name}
         </p>
-        <Link href={`/products/${product.slug}`} className="font-medium leading-snug hover:underline">
+        <Link href={`/products/${product.slug}`} className="break-words font-medium leading-snug hover:underline">
           {product.name}
         </Link>
-        <p className="text-xs text-[color:var(--muted)]">
+        <p className="break-words text-xs text-[color:var(--muted)]">
           {[product.form, product.strength_value && `${product.strength_value} ${product.strength_unit ?? ""}`, product.count && `${product.count} ct`]
             .filter(Boolean)
             .join(" · ")}

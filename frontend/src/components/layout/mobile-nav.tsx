@@ -38,7 +38,7 @@ export function MobileNav({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-[--radius] text-[color:var(--brand-ink)] hover:bg-[color:var(--brand-cream)] lg:hidden"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[--radius] text-[color:var(--brand-ink)] hover:bg-[color:var(--brand-cream)] xl:hidden"
         aria-label="Open menu"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -48,7 +48,7 @@ export function MobileNav({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 lg:hidden"
+          className="fixed inset-0 z-50 xl:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Site menu"

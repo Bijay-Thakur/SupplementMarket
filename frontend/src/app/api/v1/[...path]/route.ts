@@ -13,6 +13,7 @@ import {
   createPromotion,
   createTag,
   dashboard,
+  deleteOrder,
   duplicateProduct,
   getAdminOrder,
   getCatalogImport,
@@ -39,6 +40,7 @@ import { assertSameOrigin } from "@/lib/auth/origin";
 import { catalogRepository, getDataProvider } from "@/lib/data/repository";
 import { dashboard as supabaseDashboard } from "@/lib/data/supabase-catalog";
 import {
+  deleteAdminOrder,
   getAdminOrderFromDatabase,
   getCustomerOrder,
   listAdminOrderNotifications,
@@ -166,7 +168,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const repo = catalogRepository();
     if (key === "products") return json(await Promise.resolve(repo.listProducts(productQuery(sp))));
     if (key === "products/suggestions") return json(await Promise.resolve(repo.suggestions(sp.get("q") ?? "")));
-    if (key === "products/filters") return json(await Promise.resolve(repo.filters()));
+    if (key === "products/filters") return json(await Promise.resolve(repo.filters(productQuery(sp))));
     if (path[0] === "products" && path.length === 2) return json(await Promise.resolve(repo.getProductBySlug(path[1])));
     if (path[0] === "products" && path[2] === "related") return json(await Promise.resolve(repo.relatedFor(path[1])));
 
@@ -456,18 +458,48 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     if (path[0] === "admin" && path[1] === "orders" && path[3] === "status") {
       requireSameOrigin(req);
-      await requireAdmin(req);
+      const admin = await requireAdmin(req);
+      const bypassPaymentRequirement = body.bypass_payment_requirement === true;
       if (getDataProvider() === "supabase") {
         const status = typeof body.status === "string" ? body.status : undefined;
         const paymentStatus = typeof body.payment_status === "string" ? body.payment_status : undefined;
-        const updated = await updateAdminOrderStatus(Number(path[2]), status, paymentStatus);
+        const updated = await updateAdminOrderStatus(
+          Number(path[2]),
+          status,
+          paymentStatus,
+          bypassPaymentRequirement,
+          admin.id,
+        );
         revalidatePath("/admin");
         revalidatePath("/admin/orders");
+        if (bypassPaymentRequirement && updated.payment_requirement_bypassed) {
+          await audit(
+            req,
+            "order.payment_bypass",
+            "order",
+            updated.id,
+            `Payment requirement bypassed for ${updated.order_number}`,
+          );
+        }
         return json(updated);
       }
       const status = typeof body.status === "string" ? body.status : undefined;
       const paymentStatus = typeof body.payment_status === "string" ? body.payment_status : undefined;
-      const updated = updateOrderStatus(Number(path[2]), status, paymentStatus);
+      const updated = updateOrderStatus(
+        Number(path[2]),
+        status,
+        paymentStatus,
+        bypassPaymentRequirement,
+      );
+      if (bypassPaymentRequirement && updated.payment_requirement_bypassed) {
+        await audit(
+          req,
+          "order.payment_bypass",
+          "order",
+          updated.id,
+          `Payment requirement bypassed for ${updated.order_number}`,
+        );
+      }
       await audit(req, "order.status", "order", updated.id, `Status ${updated.status}`);
       return json(updated);
     }
@@ -557,6 +589,25 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       }
       deleteAddress(user.id, path[2]);
       return json({ ok: true });
+    }
+    if (path[0] === "admin" && path[1] === "orders" && path.length === 3) {
+      await requireAdmin(req);
+      const body = await readJson(req);
+      const confirmation = typeof body.confirmation === "string" ? body.confirmation : "";
+      let deleted;
+      if (getDataProvider() === "supabase") {
+        deleted = await deleteAdminOrder(Number(path[2]), confirmation);
+      } else {
+        const order = getAdminOrder(Number(path[2]));
+        if (confirmation !== order.order_number) {
+          throw new ApiHttpError(400, `Type ${order.order_number} to delete this order.`, "validation");
+        }
+        deleted = deleteOrder(Number(path[2]));
+      }
+      revalidatePath("/admin");
+      revalidatePath("/admin/orders");
+      await audit(req, "order.delete", "order", path[2], `Deleted ${deleted.order_number}`);
+      return json(deleted);
     }
     if (
       path[0] === "admin" &&

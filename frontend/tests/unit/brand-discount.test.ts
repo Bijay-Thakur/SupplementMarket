@@ -5,7 +5,7 @@ import {
   resetDemoStore,
   updateBrand,
 } from "@/lib/demo-store/engine";
-import { saleFromPercent } from "@/lib/money";
+import { discountPercent, saleFromPercent } from "@/lib/money";
 
 describe("brand discount pricing", () => {
   beforeEach(() => {
@@ -21,10 +21,11 @@ describe("brand discount pricing", () => {
 
     expect(products.length).toBeGreaterThan(0);
     for (const product of products) {
-      expect(product.sale_price_cents).toBe(
-        saleFromPercent(product.regular_price_cents, 25),
+      const roundedSale = saleFromPercent(product.regular_price_cents, 25);
+      expect(product.sale_price_cents).toBe(roundedSale);
+      expect(product.discount_percent).toBe(
+        discountPercent(product.regular_price_cents, roundedSale),
       );
-      expect(product.discount_percent).toBe(25);
     }
   });
 

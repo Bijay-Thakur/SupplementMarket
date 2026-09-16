@@ -19,7 +19,7 @@ type OrderWithItems = OrderRow & { order_items: OrderItemRow[] | null };
 const MIGRATION_ERROR_CODES = new Set(["PGRST202", "PGRST204", "PGRST205", "42P01", "42703"]);
 
 const ORDER_SELECT =
-  "id,public_token,order_number,user_id,fulfillment_type,status,customer_name,customer_email,customer_phone,delivery_address_line1,delivery_address_line2,delivery_city,delivery_state,delivery_zip,delivery_instructions,payment_method,payment_status,currency,subtotal_cents,delivery_fee_cents,total_cents,notes,is_demo,placed_at,paid_at,admin_seen_at,cancelled_at,created_at,updated_at,order_items(id,product_id,product_name,brand_name,sku,unit_price_cents,quantity,line_total_cents,created_at)" as const;
+  "id,public_token,order_number,user_id,fulfillment_type,status,customer_name,customer_email,customer_phone,delivery_address_line1,delivery_address_line2,delivery_city,delivery_state,delivery_zip,delivery_instructions,payment_method,payment_status,payment_requirement_bypassed,payment_bypassed_at,payment_bypassed_by,payment_bypass_reason,currency,subtotal_cents,delivery_fee_cents,total_cents,notes,is_demo,placed_at,paid_at,admin_seen_at,cancelled_at,created_at,updated_at,order_items(id,product_id,product_name,brand_name,sku,unit_price_cents,quantity,line_total_cents,created_at)" as const;
 
 const requestSchema = z
   .object({
@@ -77,6 +77,7 @@ const ORDER_STATUSES = new Set([
   "cancelled",
 ]);
 const PAYMENT_STATUSES = new Set(["unpaid", "paid"]);
+const PAYMENT_REQUIRED_STATUSES = new Set(["shipped", "out_for_delivery", "delivered", "completed"]);
 
 function clientOrThrow() {
   const client = getSupabaseAdminClient();
@@ -128,6 +129,7 @@ function toPublicOrder(row: OrderWithItems): OrderPublic {
     total_cents: Number(row.total_cents),
     items: itemsOf(row),
     created_at: row.created_at,
+    paid_at: row.paid_at,
     persistence: "database",
   };
 }
@@ -163,6 +165,10 @@ function toAdminDetail(row: OrderWithItems): AdminOrderDetail {
     created_at: row.created_at,
     placed_at: row.placed_at,
     paid_at: row.paid_at,
+    payment_requirement_bypassed: row.payment_requirement_bypassed,
+    payment_bypassed_at: row.payment_bypassed_at,
+    payment_bypassed_by: row.payment_bypassed_by,
+    payment_bypass_reason: row.payment_bypass_reason,
     admin_seen_at: row.admin_seen_at,
     cancelled_at: row.cancelled_at,
   };
@@ -305,6 +311,8 @@ export async function updateAdminOrderStatus(
   id: number,
   status: string | undefined,
   paymentStatus?: string,
+  bypassPaymentRequirement = false,
+  adminId?: string,
 ) {
   if (!Number.isSafeInteger(id) || id < 1) {
     throw new ApiHttpError(400, "Invalid order id.", "validation");
@@ -320,11 +328,24 @@ export async function updateAdminOrderStatus(
   }
   const current = await orderById(id);
   const nextStatus = status ?? current.status;
+  const nextPaymentStatus = paymentStatus ?? current.payment_status;
   const incompatible = current.fulfillment_type === "pickup"
     ? new Set(["shipped", "out_for_delivery", "delivered"]).has(nextStatus)
     : nextStatus === "ready_for_pickup";
   if (incompatible) {
     throw new ApiHttpError(400, "That status does not match the order fulfillment type.", "validation");
+  }
+  if (
+    PAYMENT_REQUIRED_STATUSES.has(nextStatus) &&
+    nextPaymentStatus !== "paid" &&
+    !current.payment_requirement_bypassed &&
+    !bypassPaymentRequirement
+  ) {
+    throw new ApiHttpError(
+      409,
+      "Record payment before shipping or completing this order, or explicitly enable the admin payment bypass.",
+      "payment_required",
+    );
   }
   const update: TablesUpdate<"orders"> = {};
   if (status !== undefined) {
@@ -335,12 +356,41 @@ export async function updateAdminOrderStatus(
     update.payment_status = paymentStatus;
     update.paid_at = paymentStatus === "paid" ? new Date().toISOString() : null;
   }
+  if (
+    bypassPaymentRequirement &&
+    PAYMENT_REQUIRED_STATUSES.has(nextStatus) &&
+    nextPaymentStatus !== "paid"
+  ) {
+    update.payment_requirement_bypassed = true;
+    update.payment_bypassed_at = new Date().toISOString();
+    update.payment_bypassed_by = adminId ?? null;
+    update.payment_bypass_reason = "Administrator approved fulfillment before payment.";
+  }
   const { error } = await clientOrThrow()
     .from("orders")
     .update(update)
     .eq("id", id);
   if (error) databaseError(error, "The order status could not be updated.");
   return getAdminOrderFromDatabase(id);
+}
+
+export async function deleteAdminOrder(id: number, confirmation: string) {
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw new ApiHttpError(400, "Invalid order id.", "validation");
+  }
+  const current = await orderById(id);
+  if (confirmation !== current.order_number) {
+    throw new ApiHttpError(400, `Type ${current.order_number} to delete this order.`, "validation");
+  }
+  const { data, error } = await clientOrThrow()
+    .from("orders")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error) databaseError(error, "The order could not be deleted.");
+  if (!data) throw new ApiHttpError(404, "Order not found.", "not_found");
+  return { ok: true, order_id: id, order_number: current.order_number };
 }
 
 export async function listAdminOrderNotifications(): Promise<AdminOrderNotification[]> {

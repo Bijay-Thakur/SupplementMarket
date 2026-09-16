@@ -11,6 +11,7 @@ import { createOrder, getStoreSettings } from "@/lib/api/catalog";
 import { ApiRequestError } from "@/lib/api/client";
 import type { OrderPublic } from "@/lib/api/types";
 import type { AuthUser } from "@/lib/auth/types";
+import { ActivityOverlay } from "@/components/ui/activity-overlay";
 
 export function CheckoutForm({ user }: { user: AuthUser }) {
   const { items, subtotalCents, clear } = useCart();
@@ -151,6 +152,7 @@ export function CheckoutForm({ user }: { user: AuthUser }) {
 
   return (
     <Container className="py-12">
+      <ActivityOverlay visible={pending} label="Submitting your order…" />
       <h1 className="font-display text-3xl font-semibold">Checkout</h1>
       <p className="mt-2 max-w-2xl rounded-[--radius] border border-dashed border-[color:var(--brand-gold)] bg-[color:var(--brand-cream)] px-4 py-3 text-sm">
         Submit your order request here, then call the store to confirm it. No online payment or card information is collected.

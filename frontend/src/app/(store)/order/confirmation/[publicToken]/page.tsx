@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/money";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { orderStatusLabel, paymentStatusLabel } from "@/lib/orders/status";
+import { ReceiptActions } from "@/components/orders/receipt-actions";
 
 export default function OrderConfirmationPage() {
   const { publicToken } = useParams<{ publicToken: string }>();
@@ -55,9 +56,19 @@ export default function OrderConfirmationPage() {
             <span>Total</span>
             <span>{formatCents(q.data.total_cents)}</span>
           </p>
-          <p className="mt-4 text-sm text-[color:var(--muted)]">
-            No online payment was taken. Call the store to confirm your order and arrange {q.data.fulfillment_type}.
-          </p>
+          {q.data.payment_status === "paid" ? (
+            <div className="mt-5 rounded-[--radius] border border-green-200 bg-green-50 p-4">
+              <p className="font-semibold text-green-900">Payment receipt</p>
+              <p className="mt-1 text-sm text-green-800">
+                Payment has been recorded for this order. You can download, print, or save this receipt as a PDF.
+              </p>
+              <ReceiptActions order={q.data} />
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-[color:var(--muted)]">
+              No online payment was taken. Call the store to confirm your order and arrange {q.data.fulfillment_type}.
+            </p>
+          )}
           <a href={phoneHref} className={`${buttonVariants()} mt-5`}>
             Call {storePhone}
           </a>

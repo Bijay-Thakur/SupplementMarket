@@ -7,6 +7,9 @@ const migration = read("../supabase/migrations/20260914183000_catalog_recovery_p
 const apiRoute = read("src/app/api/v1/[...path]/route.ts");
 const editor = read("src/components/admin/product-editor.tsx");
 const catalogBrowser = read("src/components/catalog/catalog-browser.tsx");
+const liveCatalog = read("src/lib/data/supabase-catalog.ts");
+const cleanupMigration = read("../supabase/migrations/20260915120000_remove_naturesplus_products.sql");
+const catalogApi = read("src/lib/api/catalog.ts");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -31,5 +34,26 @@ describe("catalog recovery and deletion", () => {
   it("uses the canonical brand page from a locked category", () => {
     expect(catalogBrowser).toMatch(/if \(slug && locked\?\.category\)/);
     expect(catalogBrowser).toMatch(/router\.push\(`\/brands\/\$\{encodeURIComponent\(slug\)\}`\)/);
+    expect(catalogBrowser).toMatch(/if \(locked\?\.brand\)/);
+    expect(catalogBrowser).toMatch(/if \(locked\?\.category\)/);
+    expect(catalogBrowser).toMatch(/router\.push\(slug \? `\/categories/);
+  });
+
+  it("applies every customer-facing filter and sort in the live catalog", () => {
+    expect(liveCatalog).toMatch(/pq\.dietary/);
+    expect(liveCatalog).toMatch(/pq\.price_min/);
+    expect(liveCatalog).toMatch(/pq\.price_max/);
+    expect(liveCatalog).toMatch(/pq\.sort === "price_asc"/);
+    expect(liveCatalog).toMatch(/pq\.sort === "discount"/);
+    expect(liveCatalog).toMatch(/new Set\(\["category"\]\)/);
+    expect(liveCatalog).toMatch(/new Set\(\["form"\]\)/);
+    expect(catalogApi).toMatch(/products\/filters\$\{toQuery/);
+    expect(apiRoute).toMatch(/repo\.filters\(productQuery\(sp\)\)/);
+  });
+
+  it("removes only the normalized Nature's Plus brand identity", () => {
+    expect(cleanupMigration).toMatch(/naturesplus/i);
+    expect(cleanupMigration).toMatch(/delete from public\.products/i);
+    expect(cleanupMigration).not.toMatch(/naturesway/i);
   });
 });

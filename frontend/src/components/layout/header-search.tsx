@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { productSuggestions } from "@/lib/api/catalog";
 
 type Item = { type?: string; name: string; slug?: string; href?: string; brand_name?: string };
@@ -24,6 +24,8 @@ function writeRecent(q: string) {
 
 export function HeaderSearch({ className }: { className?: string }) {
   const router = useRouter();
+  const searchId = useId();
+  const suggestionsId = `${searchId}-suggestions`;
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,6 @@ export function HeaderSearch({ className }: { className?: string }) {
       return;
     }
     const id = ++seq.current;
-    const controller = new AbortController();
     const t = setTimeout(() => {
       setLoading(true);
       productSuggestions(q)
@@ -57,7 +58,6 @@ export function HeaderSearch({ className }: { className?: string }) {
     }, 200);
     return () => {
       clearTimeout(t);
-      controller.abort();
     };
   }, [value]);
 
@@ -81,7 +81,7 @@ export function HeaderSearch({ className }: { className?: string }) {
   return (
     <form
       role="search"
-      className={className}
+      className={`min-w-0 max-w-full ${className ?? ""}`}
       onSubmit={(e) => {
         e.preventDefault();
         const q = value.trim().slice(0, 100);
@@ -89,21 +89,21 @@ export function HeaderSearch({ className }: { className?: string }) {
         go(q ? `/products?q=${encodeURIComponent(q)}` : "/products");
       }}
     >
-      <label htmlFor="site-search" className="sr-only">
+      <label htmlFor={searchId} className="sr-only">
         Search products
       </label>
-      <div ref={box} className="relative">
+      <div ref={box} className="relative min-w-0 max-w-full">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--muted)]"
           aria-hidden
         />
         <input
-          id="site-search"
+          id={searchId}
           type="search"
           value={value}
           role="combobox"
           aria-expanded={open}
-          aria-controls="search-suggestions"
+          aria-controls={suggestionsId}
           aria-autocomplete="list"
           onChange={(e) => {
             setValue(e.target.value);
@@ -134,13 +134,20 @@ export function HeaderSearch({ className }: { className?: string }) {
           maxLength={100}
           autoComplete="off"
           placeholder="Search vitamins, brands, goals…"
-          className="h-11 w-full rounded-full border border-[color:var(--border)] bg-surface pl-9 pr-4 text-sm outline-none focus-visible:border-[color:var(--brand-magenta)]"
+          className="h-11 w-full rounded-full border border-[color:var(--border)] bg-surface pl-9 pr-20 text-sm outline-none focus-visible:border-[color:var(--brand-magenta)]"
         />
+        <button
+          type="submit"
+          className="absolute right-1 top-1/2 h-9 -translate-y-1/2 rounded-full bg-[color:var(--brand-green)] px-3 text-xs font-semibold text-white hover:bg-[color:var(--brand-green-strong)]"
+          aria-label="Search the product catalog"
+        >
+          Search
+        </button>
         {showRecent && (
-          <ul id="search-suggestions" className="absolute z-50 mt-1 w-full overflow-hidden rounded-[--radius] border border-[color:var(--border)] bg-surface shadow-lg" role="listbox">
+          <ul id={suggestionsId} className="absolute z-50 mt-1 w-full overflow-hidden rounded-[--radius] border border-[color:var(--border)] bg-surface shadow-lg" role="listbox">
             {recent.map((q) => (
               <li key={q}>
-                <button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--brand-cream)]" onClick={() => { setValue(q); go(`/products?q=${encodeURIComponent(q)}`, q); }}>
+                <button type="button" className="block w-full min-w-0 truncate px-3 py-2 text-left text-sm hover:bg-[color:var(--brand-cream)]" onClick={() => { setValue(q); go(`/products?q=${encodeURIComponent(q)}`, q); }}>
                   Recent: {q}
                 </button>
               </li>
@@ -148,7 +155,7 @@ export function HeaderSearch({ className }: { className?: string }) {
           </ul>
         )}
         {showList && (
-          <ul id="search-suggestions" className="absolute z-50 mt-1 w-full overflow-hidden rounded-[--radius] border border-[color:var(--border)] bg-surface shadow-lg" role="listbox">
+          <ul id={suggestionsId} className="absolute z-50 mt-1 w-full overflow-hidden rounded-[--radius] border border-[color:var(--border)] bg-surface shadow-lg" role="listbox">
             {loading && <li className="px-3 py-2 text-sm text-[color:var(--muted)]">Searching…</li>}
             {!loading && items.length === 0 && (
               <li className="px-3 py-2 text-sm text-[color:var(--muted)]">No matching products, brands, or categories.</li>
@@ -159,7 +166,7 @@ export function HeaderSearch({ className }: { className?: string }) {
                   type="button"
                   role="option"
                   aria-selected={idx === active}
-                  className={`block w-full px-3 py-2 text-left text-sm ${idx === active ? "bg-[color:var(--brand-cream)]" : "hover:bg-[color:var(--brand-cream)]"}`}
+                  className={`block w-full min-w-0 truncate px-3 py-2 text-left text-sm ${idx === active ? "bg-[color:var(--brand-cream)]" : "hover:bg-[color:var(--brand-cream)]"}`}
                   onMouseEnter={() => setActive(idx)}
                   onClick={() => go(item.href || `/products/${item.slug}`, value.trim())}
                 >

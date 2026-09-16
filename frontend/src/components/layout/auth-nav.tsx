@@ -6,7 +6,7 @@ export async function AuthNav() {
   const user = await getAuthenticatedUser();
   if (!user) {
     return (
-      <div className="hidden items-center gap-2 lg:flex">
+      <div className="hidden items-center gap-2 xl:flex">
         <Link
           href="/auth/sign-in"
           className="rounded-[--radius] px-3 py-2 text-sm font-medium text-[color:var(--brand-ink)] hover:bg-[color:var(--brand-cream)]"
@@ -23,7 +23,7 @@ export async function AuthNav() {
     );
   }
   return (
-    <div className="hidden lg:block">
+    <div className="hidden xl:block">
       <AccountMenu email={user.email} />
     </div>
   );

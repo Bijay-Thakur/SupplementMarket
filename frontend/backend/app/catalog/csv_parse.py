@@ -57,6 +57,12 @@ ALLOWED_AVAILABILITY = {
     "discontinued",
 }
 
+AVAILABILITY_ALIASES = {
+    "active": "in_stock",
+}
+
+COUNT_BASED_FORMS = {"capsule", "gummy", "lozenge", "softgel", "tablet"}
+
 FOOTER_MARKERS = (
     "details & terms",
     "shipping policies",
@@ -278,6 +284,7 @@ def parse_product_row(
         image_url=trim(raw["image"]) or None,
     )
     availability = trim(raw["availability"]).lower().replace(" ", "_").replace("-", "_")
+    availability = AVAILABILITY_ALIASES.get(availability, availability)
     if availability:
         if availability in ALLOWED_AVAILABILITY:
             row.availability = availability
@@ -290,11 +297,41 @@ def parse_product_row(
     row.warnings.extend(upc_warnings)
 
     form, form_original, form_warnings = normalize_form(raw["form"])
+    if form == "other" and trim(raw["form"]).lower() == "count":
+        product_name = (row.name or "").lower()
+        inferred_form = next(
+            (
+                candidate
+                for marker, candidate in (
+                    ("gumm", "gummy"),
+                    ("tablet", "tablet"),
+                    ("capsule", "capsule"),
+                    ("softgel", "softgel"),
+                )
+                if marker in product_name
+            ),
+            None,
+        )
+        if inferred_form:
+            form = inferred_form
+            form_warnings = []
     row.form = form
     row.form_original = form_original
     row.warnings.extend(form_warnings)
 
     size = parse_size(raw["size"])
+    size_text = trim(raw["size"])
+    if (
+        size["unit_count"] is None
+        and row.form in COUNT_BASED_FORMS
+        and re.fullmatch(r"[1-9]\d*", size_text)
+    ):
+        size["unit_count"] = int(size_text)
+        size["warnings"] = [
+            warning
+            for warning in size["warnings"]
+            if warning != "Size kept as original; not auto-parsed."
+        ]
     row.unit_count = size["unit_count"]
     row.size_value = size["size_value"]
     row.size_unit = size["size_unit"]

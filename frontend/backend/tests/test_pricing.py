@@ -6,6 +6,7 @@ from app.services.pricing import (
     effective_price_cents,
     sale_price_from_percent,
     sale_price_from_brand_discount,
+    round_store_price_to_99,
     validate_prices,
 )
 
@@ -35,7 +36,10 @@ def test_validate_prices():
 
 
 def test_sale_from_percent():
-    assert sale_price_from_percent(2000, 25) == 1500
+    assert sale_price_from_percent(2000, 25) == 1499
+    assert sale_price_from_percent(2960, 20) == 2399  # computed $23.68
+    assert sale_price_from_percent(2936, 20) == 2299  # computed $23.49
+    assert sale_price_from_percent(2500, 10) == 2299  # computed $22.50
     with pytest.raises(PricingError):
         sale_price_from_percent(2000, 0)
     with pytest.raises(PricingError):
@@ -43,8 +47,14 @@ def test_sale_from_percent():
 
 
 def test_sale_from_brand_discount():
-    assert sale_price_from_brand_discount(2000, 25) == 1500
+    assert sale_price_from_brand_discount(2000, 25) == 1499
     assert sale_price_from_brand_discount(2000, 0) is None
     assert sale_price_from_brand_discount(1, 1) == 0
     with pytest.raises(PricingError):
         sale_price_from_brand_discount(2000, 100)
+
+
+def test_round_store_price_to_99():
+    assert round_store_price_to_99(2368) == 2399
+    assert round_store_price_to_99(2349) == 2299
+    assert round_store_price_to_99(2350) == 2399

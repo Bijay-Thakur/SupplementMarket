@@ -394,7 +394,11 @@ export type Database = {
           notes: string | null
           order_number: string
           paid_at: string | null
+          payment_bypass_reason: string | null
+          payment_bypassed_at: string | null
+          payment_bypassed_by: string | null
           payment_method: string
+          payment_requirement_bypassed: boolean
           payment_status: string
           placed_at: string
           public_token: string
@@ -426,7 +430,11 @@ export type Database = {
           notes?: string | null
           order_number: string
           paid_at?: string | null
+          payment_bypass_reason?: string | null
+          payment_bypassed_at?: string | null
+          payment_bypassed_by?: string | null
           payment_method?: string
+          payment_requirement_bypassed?: boolean
           payment_status?: string
           placed_at?: string
           public_token?: string
@@ -458,7 +466,11 @@ export type Database = {
           notes?: string | null
           order_number?: string
           paid_at?: string | null
+          payment_bypass_reason?: string | null
+          payment_bypassed_at?: string | null
+          payment_bypassed_by?: string | null
           payment_method?: string
+          payment_requirement_bypassed?: boolean
           payment_status?: string
           placed_at?: string
           public_token?: string

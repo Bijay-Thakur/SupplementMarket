@@ -139,6 +139,7 @@ export type OrderPublic = {
     line_total_cents: number;
   }[];
   created_at: string | null;
+  paid_at?: string | null;
   persistence?: "session" | "database";
 };
 
@@ -208,6 +209,10 @@ export type AdminOrderDetail = AdminOrderRow & {
   items: OrderPublic["items"];
   placed_at?: string | null;
   paid_at?: string | null;
+  payment_requirement_bypassed?: boolean;
+  payment_bypassed_at?: string | null;
+  payment_bypassed_by?: string | null;
+  payment_bypass_reason?: string | null;
   admin_seen_at?: string | null;
   cancelled_at?: string | null;
 };

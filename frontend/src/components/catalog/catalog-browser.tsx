@@ -50,6 +50,10 @@ export function CatalogBrowser({
   }
 
   function chooseBrand(slug: string | null) {
+    if (locked?.brand) {
+      router.push(slug ? `/brands/${encodeURIComponent(slug)}` : "/products");
+      return;
+    }
     if (slug && locked?.category) {
       // A category detail URL cannot shed its locked category. Move to the
       // canonical brand page so "view by brand" does not create an accidental
@@ -58,6 +62,14 @@ export function CatalogBrowser({
       return;
     }
     update((next) => setParam(next, "brand", slug));
+  }
+
+  function chooseCategory(slug: string | null) {
+    if (locked?.category) {
+      router.push(slug ? `/categories/${encodeURIComponent(slug)}` : "/products");
+      return;
+    }
+    update((next) => setParam(next, "category", slug));
   }
 
   const query = useQuery({
@@ -79,7 +91,22 @@ export function CatalogBrowser({
       }),
   });
 
-  const filters = useQuery({ queryKey: ["filters"], queryFn: getFilters });
+  const facetQuery = {
+    q: q || undefined,
+    brand,
+    category,
+    form,
+    availability,
+    dietary: dietary.length ? dietary : undefined,
+    on_sale: onSale,
+    is_new: isNew,
+    bestseller,
+  };
+  const filters = useQuery({
+    queryKey: ["filters", facetQuery],
+    queryFn: () => getFilters(facetQuery),
+    placeholderData: (previous) => previous,
+  });
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (q) chips.push({ key: "q", label: `Search: ${q}`, clear: () => update((n) => n.delete("q")) });
@@ -130,8 +157,8 @@ export function CatalogBrowser({
         </button>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <aside className={cn("space-y-6 text-sm", !filtersOpen && "hidden lg:block")}>
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
+        <aside className={cn("min-w-0 space-y-6 text-sm", !filtersOpen && "hidden lg:block")}>
           <FilterGroup label="Brand">
             {(filters.data?.brands ?? []).map((b) => (
               <FilterLink
@@ -148,9 +175,7 @@ export function CatalogBrowser({
                 key={c.slug}
                 active={category === c.slug}
                 label={`${c.name} (${c.count})`}
-                onClick={() =>
-                  update((n) => setParam(n, "category", category === c.slug ? null : c.slug))
-                }
+                onClick={() => chooseCategory(category === c.slug ? null : c.slug)}
               />
             ))}
           </FilterGroup>
@@ -199,15 +224,15 @@ export function CatalogBrowser({
           </FilterGroup>
         </aside>
 
-        <div>
+        <div className="min-w-0">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-[color:var(--muted)]">
               {query.data ? `${query.data.total} products` : "Loading…"}
             </p>
-            <label className="text-sm">
+            <label className="flex max-w-full items-center text-sm">
               Sort{" "}
               <select
-                className="ml-2 h-10 rounded-[--radius] border border-[color:var(--border)] bg-surface px-2"
+                className="ml-2 h-10 min-w-0 max-w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-2"
                 value={sort}
                 onChange={(e) => update((n) => setParam(n, "sort", e.target.value))}
               >
@@ -228,7 +253,7 @@ export function CatalogBrowser({
                   key={c.key}
                   type="button"
                   onClick={c.clear}
-                  className="rounded-full bg-[color:var(--brand-cream)] px-3 py-1 text-xs font-medium"
+                  className="max-w-full break-words rounded-full bg-[color:var(--brand-cream)] px-3 py-1 text-xs font-medium"
                 >
                   {c.label} ×
                 </button>
@@ -266,27 +291,42 @@ export function CatalogBrowser({
           ) : null}
 
           {query.data && query.data.pages > 1 && (
-            <div className="mt-8 flex justify-center gap-2">
-              {Array.from({ length: query.data.pages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => {
-                    const next = new URLSearchParams(sp.toString());
-                    next.set("page", String(p));
-                    router.push(`${pathname}?${next.toString()}`);
-                  }}
-                  className={cn(
-                    "h-10 min-w-10 rounded-[--radius] px-3 text-sm",
-                    p === page
-                      ? "bg-[color:var(--brand-green)] text-white"
-                      : "border border-[color:var(--border)] bg-surface",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
+            <nav
+              className="mt-8 flex max-w-full flex-wrap items-center justify-center gap-2"
+              aria-label="Product pages"
+            >
+              {paginationItems(page, query.data.pages).map((item) =>
+                typeof item === "number" ? (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      const next = new URLSearchParams(sp.toString());
+                      next.set("page", String(item));
+                      router.push(`${pathname}?${next.toString()}`);
+                    }}
+                    className={cn(
+                      "h-10 min-w-10 rounded-[--radius] px-3 text-sm",
+                      item === page
+                        ? "bg-[color:var(--brand-green)] text-white"
+                        : "border border-[color:var(--border)] bg-surface",
+                    )}
+                    aria-current={item === page ? "page" : undefined}
+                    aria-label={`Page ${item}`}
+                  >
+                    {item}
+                  </button>
+                ) : (
+                  <span
+                    key={item}
+                    className="inline-flex h-10 min-w-6 items-center justify-center text-sm text-[color:var(--muted)]"
+                    aria-hidden="true"
+                  >
+                    ...
+                  </span>
+                ),
+              )}
+            </nav>
           )}
         </div>
       </div>
@@ -298,7 +338,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   return (
     <div>
       <p className="mb-2 font-semibold text-[color:var(--brand-ink)]">{label}</p>
-      <div className="max-h-56 space-y-0.5 overflow-auto">{children}</div>
+      <div className="max-h-56 min-w-0 space-y-0.5 overflow-auto">{children}</div>
     </div>
   );
 }
@@ -317,11 +357,26 @@ function FilterLink({
       type="button"
       onClick={onClick}
       className={cn(
-        "block w-full rounded px-2 py-1 text-left hover:bg-[color:var(--brand-cream)]",
+        "block w-full min-w-0 break-words rounded px-2 py-1 text-left hover:bg-[color:var(--brand-cream)]",
         active && "bg-[color:var(--brand-cream)] font-semibold",
       )}
     >
       {label}
     </button>
   );
+}
+
+function paginationItems(currentPage: number, totalPages: number): (number | string)[] {
+  const current = Math.min(Math.max(currentPage, 1), totalPages);
+  const visible = [...new Set([1, current - 1, current, current + 1, totalPages])]
+    .filter((value) => value >= 1 && value <= totalPages)
+    .sort((a, b) => a - b);
+
+  const items: (number | string)[] = [];
+  visible.forEach((value, index) => {
+    const previous = visible[index - 1];
+    if (previous && value - previous > 1) items.push(`ellipsis-${previous}-${value}`);
+    items.push(value);
+  });
+  return items;
 }

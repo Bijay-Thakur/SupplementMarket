@@ -12,8 +12,11 @@ describe("money", () => {
     expect(discountPercent(2000, null)).toBeNull();
   });
 
-  it("computes sale from percent without float totals", () => {
-    expect(saleFromPercent(2000, 25)).toBe(1500);
-    expect(effectivePriceCents(2000, 1500)).toBe(1500);
+  it("computes sale from percent with a 99-cent ending", () => {
+    expect(saleFromPercent(2000, 25)).toBe(1499);
+    expect(saleFromPercent(2960, 20)).toBe(2399);
+    expect(saleFromPercent(2936, 20)).toBe(2299);
+    expect(saleFromPercent(2500, 10)).toBe(2299);
+    expect(effectivePriceCents(2000, 1499)).toBe(1499);
   });
 });

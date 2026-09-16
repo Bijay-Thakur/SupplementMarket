@@ -27,7 +27,11 @@ export function requestOrigin(req: NextRequest): string {
 /** Reject cross-site POST/PATCH/DELETE from an unexpected Origin. */
 export function assertSameOrigin(req: NextRequest): void {
   const origin = req.headers.get("origin");
-  if (!origin) return;
+  const fetchSite = req.headers.get("sec-fetch-site")?.toLowerCase();
+  if (!origin) {
+    if (fetchSite === "cross-site") throw new Error("origin");
+    return;
+  }
   if (origin !== requestOrigin(req)) {
     throw new Error("origin");
   }

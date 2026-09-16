@@ -32,7 +32,13 @@ export function discountPercent(regularCents: number, saleCents: number | null):
 }
 
 export function saleFromPercent(regularCents: number, percent: number): number {
-  return Math.round((regularCents * (100 - percent)) / 100);
+  const computed = Math.floor((regularCents * (100 - percent) + 50) / 100);
+  const dollars = Math.floor(computed / 100);
+  const cents = computed % 100;
+  const rounded = cents >= 50 ? dollars * 100 + 99 : dollars * 100 - 1;
+  if (rounded < regularCents) return Math.max(0, rounded);
+  const highest99BelowRegular = Math.floor((regularCents - 100) / 100) * 100 + 99;
+  return Math.max(0, highest99BelowRegular);
 }
 
 export function effectivePriceCents(regularCents: number, saleCents: number | null): number {

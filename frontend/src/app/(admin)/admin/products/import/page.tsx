@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, FileSpreadsheet, LoaderCircle, UploadCloud, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCents } from "@/lib/money";
+import { ActivityOverlay } from "@/components/ui/activity-overlay";
 
 type DuplicateMatch = {
   variant_id: string;
@@ -393,6 +394,7 @@ export default function ProductImportPage() {
 
   return (
     <div>
+      <ActivityOverlay visible={Boolean(activity)} label={activity ?? "Working…"} />
       <h1 className="font-display text-3xl font-semibold">Import products</h1>
       <p className="mt-1 text-sm text-[color:var(--muted)]">
         Upload, map, review, then approve. No product is written to the database before final approval.

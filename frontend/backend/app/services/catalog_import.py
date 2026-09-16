@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.catalog.csv_images import download_product_image, image_url_allowed
+from app.catalog.csv_images import image_url_allowed
 from app.catalog.csv_normalize import slugify, trim
 from app.catalog.csv_parse import DetectedColumn, parse_catalog_csv, parse_product_row
 from app.core.config import settings
@@ -648,26 +648,26 @@ def _upsert_category(name: str | None) -> dict[str, Any] | None:
     return sb.insert("categories", {"name": name, "slug": slug, "is_active": True})
 
 
-def _try_attach_image(row: dict[str, Any], brand_slug: str, product_slug: str, product_id: str) -> None:
+def _try_attach_image(row: dict[str, Any], product_id: str) -> None:
+    """Attach an already-validated HTTPS image reference without blocking the import.
+
+    Downloading every image inside a serverless CSV commit made otherwise valid
+    imports exceed the request deadline. The storefront already supports HTTPS
+    image URLs, so durable product data is committed first and the source image
+    remains usable without a slow network/storage copy.
+    """
     url = row.get("image_url")
     if not url:
         return
     existing_imgs = sb.select("product_images", {"select": "id", "product_id": f"eq.{product_id}", "limit": "1"})
     if existing_imgs:
         return
-    downloaded = download_product_image(url)
-    if not downloaded:
-        row.setdefault("warnings", []).append("Image import failed; the product was saved without an image.")
-        return
-    content, mime, ext = downloaded
-    object_path = f"{brand_slug}/{product_slug}/{uuid.uuid4()}.{ext}"
     try:
-        sb.upload_object("product-images", object_path, content, mime)
         sb.insert(
             "product_images",
             {
                 "product_id": product_id,
-                "storage_path": object_path,
+                "storage_path": url,
                 "alt_text": row.get("name"),
                 "is_primary": True,
                 "display_order": 0,
@@ -926,12 +926,7 @@ def commit_csv(batch_id: str, *, included_row_numbers: list[int] | None, force_r
                 committed_product_id=committed_product_id,
                 committed_variant_id=committed_variant_id,
             )
-            _try_attach_image(
-                row,
-                brand["slug"],
-                product.get("slug") or product["id"],
-                product["id"],
-            )
+            _try_attach_image(row, product["id"])
     except Exception:
         sb.update(
             "catalog_import_batches",

@@ -38,6 +38,14 @@ export default function AccountOrdersPage() {
               <p className="text-[color:var(--muted)]">
                 {orderStatusLabel(o.status)} · {o.fulfillment_type} · {paymentStatusLabel(o.payment_status)} · {formatCents(o.total_cents)}
               </p>
+              {o.payment_status === "paid" && (
+                <Link
+                  href={`/order/confirmation/${o.public_token}`}
+                  className="mt-1 inline-block font-semibold text-[color:var(--brand-magenta)] underline"
+                >
+                  View or download receipt
+                </Link>
+              )}
             </li>
           ))}
         </ul>

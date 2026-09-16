@@ -75,7 +75,7 @@ export const SIGNUP_GENERIC_ERROR =
 export const MISSING_PROFILE_MESSAGE = "Your profile is not ready yet. Sign out and sign in again, or contact the store.";
 export const MISSING_ROLE_MESSAGE = "Your account role is missing. Contact the store if this continues.";
 
-export const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 12;
 
 export function validatePassword(password: string): string | null {
   const parsed = passwordSchema.safeParse(password);

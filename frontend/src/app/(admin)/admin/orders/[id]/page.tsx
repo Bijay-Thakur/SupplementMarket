@@ -1,8 +1,9 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
+  adminDeleteOrder,
   adminGetOrder,
   adminMarkOrderNotificationSeen,
   adminUpdateOrderStatus,
@@ -11,6 +12,8 @@ import { formatCents } from "@/lib/money";
 import { ApiRequestError } from "@/lib/api/client";
 import { orderStatusLabel, paymentStatusLabel } from "@/lib/orders/status";
 import { useEffect, useState } from "react";
+import { ReceiptActions } from "@/components/orders/receipt-actions";
+import { ActivityOverlay } from "@/components/ui/activity-overlay";
 
 const PICKUP_STATUSES = [
   "placed",
@@ -30,11 +33,16 @@ const DELIVERY_STATUSES = [
   "completed",
   "cancelled",
 ];
+const PAYMENT_REQUIRED_STATUSES = new Set(["shipped", "out_for_delivery", "delivered", "completed"]);
 
 export default function AdminOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [allowUnpaidFulfillment, setAllowUnpaidFulfillment] = useState(false);
   const q = useQuery({
     queryKey: ["admin-order", id],
     queryFn: () => adminGetOrder(Number(id)),
@@ -53,6 +61,7 @@ export default function AdminOrderDetailPage() {
   if (!o) return <p>Loading…</p>;
   return (
     <div className="max-w-2xl">
+      <ActivityOverlay visible={updating} label="Updating order…" />
       <h1 className="font-display text-3xl font-semibold">{o.order_number}</h1>
       {o.is_demo && <p className="mt-1 text-xs uppercase text-[color:var(--brand-magenta)]">Demo order</p>}
       <p className="mt-4 text-sm">
@@ -75,7 +84,12 @@ export default function AdminOrderDetailPage() {
               setUpdating(true);
               setUpdateError(null);
               try {
-                await adminUpdateOrderStatus(o.id, event.target.value);
+                await adminUpdateOrderStatus(
+                  o.id,
+                  event.target.value,
+                  undefined,
+                  allowUnpaidFulfillment,
+                );
                 await q.refetch();
               } catch (error) {
                 setUpdateError(
@@ -86,9 +100,19 @@ export default function AdminOrderDetailPage() {
               }
             }}
           >
-            {(o.fulfillment_type === "delivery" ? DELIVERY_STATUSES : PICKUP_STATUSES).map((status) => (
-              <option key={status} value={status}>{orderStatusLabel(status)}</option>
-            ))}
+            {(o.fulfillment_type === "delivery" ? DELIVERY_STATUSES : PICKUP_STATUSES).map((status) => {
+              const requiresPayment = PAYMENT_REQUIRED_STATUSES.has(status);
+              const blocked =
+                requiresPayment &&
+                o.payment_status !== "paid" &&
+                !o.payment_requirement_bypassed &&
+                !allowUnpaidFulfillment;
+              return (
+                <option key={status} value={status} disabled={blocked}>
+                  {orderStatusLabel(status)}{blocked ? " — payment required" : ""}
+                </option>
+              );
+            })}
           </select>
         </label>
         <label className="block text-sm font-medium">
@@ -103,6 +127,7 @@ export default function AdminOrderDetailPage() {
               try {
                 await adminUpdateOrderStatus(o.id, undefined, event.target.value);
                 await q.refetch();
+                if (event.target.value === "paid") setAllowUnpaidFulfillment(false);
               } catch (error) {
                 setUpdateError(
                   error instanceof ApiRequestError ? error.message : "The payment status could not be updated.",
@@ -116,6 +141,25 @@ export default function AdminOrderDetailPage() {
             <option value="paid">{paymentStatusLabel("paid")}</option>
           </select>
         </label>
+        {o.payment_status !== "paid" && !o.payment_requirement_bypassed && (
+          <label className="flex items-start gap-2 rounded-[--radius] border border-amber-300 bg-amber-50 p-3 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={allowUnpaidFulfillment}
+              onChange={(event) => setAllowUnpaidFulfillment(event.target.checked)}
+            />
+            <span>
+              <strong>Manual payment bypass:</strong> allow shipping, delivery, or completion before payment is recorded.
+            </span>
+          </label>
+        )}
+        {o.payment_requirement_bypassed && (
+          <p className="rounded-[--radius] border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2">
+            Payment requirement manually bypassed
+            {o.payment_bypassed_at ? ` on ${new Date(o.payment_bypassed_at).toLocaleString()}` : ""}.
+          </p>
+        )}
       </div>
       {o.delivery_instructions && (
         <p className="mt-2 text-sm">
@@ -138,6 +182,72 @@ export default function AdminOrderDetailPage() {
         <span>Total (server-calculated)</span>
         <span>{formatCents(o.total_cents)}</span>
       </p>
+      {o.payment_status === "paid" && (
+        <section className="mt-6 rounded-[--radius] border border-green-200 bg-green-50 p-4">
+          <h2 className="font-semibold text-green-950">Payment receipt</h2>
+          <p className="mt-1 text-sm text-green-800">
+            Payment was recorded{o.paid_at ? ` on ${new Date(o.paid_at).toLocaleString()}` : ""}.
+          </p>
+          <ReceiptActions order={o} />
+        </section>
+      )}
+      <section className="mt-8 border-t border-red-200 pt-6">
+        <h2 className="font-semibold text-red-900">Delete order</h2>
+        <p className="mt-1 text-sm text-[color:var(--muted)]">
+          This permanently removes the order and its item records. This cannot be undone.
+        </p>
+        {!deleteOpen ? (
+          <button
+            type="button"
+            className="mt-3 rounded-[--radius] border border-red-300 px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Delete order
+          </button>
+        ) : (
+          <div className="mt-3 max-w-md rounded-[--radius] border border-red-200 bg-red-50 p-4">
+            <label className="block text-sm font-medium text-red-950">
+              Type {o.order_number} to confirm
+              <input
+                className="fld mt-1 bg-white"
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="rounded-[--radius] bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={updating || deleteConfirmation !== o.order_number}
+                onClick={async () => {
+                  setUpdating(true);
+                  setUpdateError(null);
+                  try {
+                    await adminDeleteOrder(o.id, deleteConfirmation);
+                    router.replace("/admin/orders");
+                  } catch (error) {
+                    setUpdateError(error instanceof ApiRequestError ? error.message : "The order could not be deleted.");
+                    setUpdating(false);
+                  }
+                }}
+              >
+                Permanently delete
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 text-sm underline"
+                onClick={() => {
+                  setDeleteOpen(false);
+                  setDeleteConfirmation("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

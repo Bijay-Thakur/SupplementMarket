@@ -70,15 +70,28 @@
 }
 
 html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   scroll-behavior: smooth;
 }
 
 body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 h1,
@@ -155,4 +168,20 @@ textarea.fld {
   height: auto;
   min-height: 5rem;
   padding: 0.5rem 0.75rem;
+}
+
+@media print {
+  header,
+  footer,
+  nav,
+  aside,
+  .receipt-actions,
+  .skip-link {
+    display: none !important;
+  }
+
+  body,
+  main {
+    background: white !important;
+  }
 }

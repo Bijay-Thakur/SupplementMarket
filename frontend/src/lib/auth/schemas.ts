@@ -8,9 +8,10 @@ export function normalizeEmail(value: string): string {
 
 export const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters.")
-  .refine((value) => /[A-Za-z]/.test(value) && /\d/.test(value), {
-    message: "Password must include at least one letter and one number.",
+  .min(12, "Password must be at least 12 characters.")
+  .max(128, "Password must be 128 characters or fewer.")
+  .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value), {
+    message: "Password must include uppercase and lowercase letters and a number.",
   });
 
 export const usernameSchema = z

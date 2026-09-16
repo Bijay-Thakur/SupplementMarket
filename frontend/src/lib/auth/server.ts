@@ -126,6 +126,10 @@ export async function requireUser(req?: NextRequest | { kind?: AuthKind; next?: 
     if (kind === "page") unauthenticatedRedirect(next);
     throw new ApiHttpError(401, "Sign in is required.", "unauthorized");
   }
+  if (!user.emailVerified) {
+    if (kind === "page") redirect("/auth/check-email");
+    throw new ApiHttpError(403, "Confirm your email before continuing.", "email_unverified");
+  }
   return user;
 }
 
@@ -137,6 +141,10 @@ export async function requireAdmin(req?: NextRequest | { kind?: AuthKind; next?:
   if (!user) {
     if (kind === "page") redirect(`/admin/login?next=${encodeURIComponent(safeNextPath(next, "/admin"))}`);
     throw new ApiHttpError(401, "Sign in is required.", "unauthorized");
+  }
+  if (!user.emailVerified) {
+    if (kind === "page") redirect("/auth/check-email");
+    throw new ApiHttpError(403, "Confirm your email before continuing.", "email_unverified");
   }
   if (user.missingRole || user.role !== "admin") {
     if (kind === "page") redirect("/auth/forbidden");

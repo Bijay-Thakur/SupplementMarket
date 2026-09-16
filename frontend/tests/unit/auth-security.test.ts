@@ -30,16 +30,16 @@ describe("signup validation", () => {
       username: "good_user",
       fullName: "Ada Lovelace",
       email: "Ada@Example.com",
-      password: "secret123",
-      confirmPassword: "secret123",
+      password: "SecureSecret123",
+      confirmPassword: "SecureSecret123",
     });
     expect(fields).toEqual({});
     const withRole = signUpSchema.safeParse({
       username: "good_user",
       fullName: "Ada Lovelace",
       email: "ada@example.com",
-      password: "secret123",
-      confirmPassword: "secret123",
+      password: "SecureSecret123",
+      confirmPassword: "SecureSecret123",
       role: "admin",
     });
     expect(withRole.success).toBe(false);
@@ -50,12 +50,13 @@ describe("signup validation", () => {
       username: "shopper_1",
       fullName: "Test User",
       email: "  Test.User@Example.COM ",
-      password: "abcdefg1",
-      confirmPassword: "abcdefg1",
+      password: "SecurePass123",
+      confirmPassword: "SecurePass123",
     });
     expect(parsed.email).toBe("test.user@example.com");
     expect(passwordSchema.safeParse("password").success).toBe(false);
     expect(passwordSchema.safeParse("12345678").success).toBe(false);
+    expect(passwordSchema.safeParse("alllowercase123").success).toBe(false);
   });
 });
 

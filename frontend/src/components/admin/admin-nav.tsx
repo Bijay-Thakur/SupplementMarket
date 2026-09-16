@@ -11,7 +11,6 @@ const LINKS = [
   { href: "/admin/products/import", label: "CSV Import" },
   { href: "/admin/brands", label: "Brands" },
   { href: "/admin/taxonomy", label: "Categories" },
-  { href: "/admin/promotions", label: "Sales and Pricing" },
   { href: "/admin/products/imports", label: "Import History" },
   { href: "/admin/settings", label: "Store Settings" },
   { href: "/admin/orders", label: "Orders" },

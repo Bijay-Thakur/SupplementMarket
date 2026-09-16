@@ -119,24 +119,70 @@ function pageOf<T>(items: T[], page = 1, pageSize = 24): Page<T> {
   };
 }
 
+type Facet = "brand" | "category" | "form" | "availability" | "dietary";
+
+function filterCatalog(
+  source: ProductDetail[],
+  pq: ProductQuery,
+  excluded: ReadonlySet<Facet> = new Set(),
+) {
+  let items = [...source];
+  if (!excluded.has("brand") && pq.brand) items = items.filter((p) => p.brand_slug === pq.brand);
+  if (!excluded.has("category") && pq.category) items = items.filter((p) => p.category_slug === pq.category);
+  if (!excluded.has("form") && pq.form) items = items.filter((p) => p.form === pq.form);
+  if (!excluded.has("availability") && pq.availability) {
+    items = items.filter((p) => p.availability === pq.availability);
+  }
+  if (pq.on_sale != null) items = items.filter((p) => p.on_sale === pq.on_sale);
+  if (pq.featured != null) items = items.filter((p) => p.is_featured === pq.featured);
+  if (pq.bestseller != null) items = items.filter((p) => p.is_bestseller === pq.bestseller);
+  if (pq.is_new != null) items = items.filter((p) => p.is_new === pq.is_new);
+  if (pq.price_min != null) items = items.filter((p) => p.effective_price_cents >= pq.price_min!);
+  if (pq.price_max != null) items = items.filter((p) => p.effective_price_cents <= pq.price_max!);
+  if (!excluded.has("dietary")) {
+    for (const dietary of pq.dietary ?? []) {
+      if (dietary in (items[0]?.dietary ?? {})) {
+        items = items.filter((p) => Boolean(p.dietary[dietary as keyof typeof p.dietary]));
+      }
+    }
+  }
+  if (pq.q?.trim()) {
+    const hits = searchDocuments(items.map((p) => documentFromProduct(p)), pq.q);
+    const ids = new Set(hits.map((hit) => String(hit.id)));
+    items = items.filter((p) => ids.has(String(p.id)));
+  }
+  return items;
+}
+
 export async function listProducts(pq: ProductQuery, includeInactive = false) {
   if (includeInactive) {
     throw new ApiHttpError(400, "Use the live admin product API for unpublished rows.", "config");
   }
-  let items = await fetchActiveProducts();
-  if (pq.brand) items = items.filter((p) => p.brand_slug === pq.brand);
-  if (pq.category) items = items.filter((p) => p.category_slug === pq.category);
-  if (pq.form) items = items.filter((p) => p.form === pq.form);
-  if (pq.availability) items = items.filter((p) => p.availability === pq.availability);
-  if (pq.on_sale) items = items.filter((p) => p.on_sale);
-  if (pq.featured) items = items.filter((p) => p.is_featured);
-  if (pq.bestseller) items = items.filter((p) => p.is_bestseller);
-  if (pq.is_new) items = items.filter((p) => p.is_new);
+  const items = filterCatalog(await fetchActiveProducts(), pq);
   if (pq.q?.trim()) {
-    const docs = items.map((p) => documentFromProduct(p));
-    const hits = searchDocuments(docs, pq.q);
-    const byId = new Map(items.map((p) => [String(p.id), p]));
-    items = hits.map((h) => byId.get(String(h.id))).filter((p): p is ProductDetail => Boolean(p));
+    const rank = new Map(
+      searchDocuments(items.map((p) => documentFromProduct(p)), pq.q).map((hit, index) => [String(hit.id), index]),
+    );
+    items.sort((a, b) => (rank.get(String(a.id)) ?? 0) - (rank.get(String(b.id)) ?? 0));
+  }
+  if (!pq.q?.trim() || (pq.sort && pq.sort !== "relevance")) {
+    const byName = (a: ProductDetail, b: ProductDetail) => a.name.localeCompare(b.name);
+    if (pq.sort === "price_asc") {
+      items.sort((a, b) => a.effective_price_cents - b.effective_price_cents || byName(a, b));
+    } else if (pq.sort === "price_desc") {
+      items.sort((a, b) => b.effective_price_cents - a.effective_price_cents || byName(a, b));
+    } else if (pq.sort === "name_asc") {
+      items.sort(byName);
+    } else if (pq.sort === "newest") {
+      items.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")) || byName(a, b));
+    } else if (pq.sort === "discount") {
+      items.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0) || byName(a, b));
+    } else {
+      items.sort((a, b) => {
+        const stock = (p: ProductDetail) => (p.availability === "in_stock" ? 0 : 1);
+        return stock(a) - stock(b) || Number(b.is_bestseller) - Number(a.is_bestseller) || Number(b.is_featured) - Number(a.is_featured) || byName(a, b);
+      });
+    }
   }
   const list = items.map((p) => ({
     id: p.id,
@@ -199,30 +245,42 @@ export async function suggestions(q: string) {
   };
 }
 
-export async function filters(): Promise<FilterOptions> {
+export async function filters(pq: ProductQuery = {}): Promise<FilterOptions> {
   const items = await fetchActiveProducts();
   const brands = new Map<string, { name: string; slug: string; count: number }>();
   const categories = new Map<string, { name: string; slug: string; count: number }>();
   const forms = new Map<string, number>();
-  for (const p of items) {
+  const dietary = new Set<string>();
+  for (const p of filterCatalog(items, pq, new Set(["brand"]))) {
     brands.set(p.brand_slug, {
       name: p.brand_name,
       slug: p.brand_slug,
       count: (brands.get(p.brand_slug)?.count ?? 0) + 1,
     });
+  }
+  for (const p of filterCatalog(items, pq, new Set(["category"]))) {
     categories.set(p.category_slug, {
       name: p.category_name,
       slug: p.category_slug,
       count: (categories.get(p.category_slug)?.count ?? 0) + 1,
     });
+  }
+  for (const p of filterCatalog(items, pq, new Set(["form"]))) {
     if (p.form) forms.set(p.form, (forms.get(p.form) ?? 0) + 1);
   }
-  const prices = items.map((p) => p.effective_price_cents);
+  for (const p of filterCatalog(items, pq, new Set(["dietary"]))) {
+    for (const [key, enabled] of Object.entries(p.dietary)) {
+      if (enabled) dietary.add(key);
+    }
+  }
+  const prices = filterCatalog(items, pq).map((p) => p.effective_price_cents);
   return {
-    brands: [...brands.values()],
-    categories: [...categories.values()],
-    forms: [...forms.entries()].map(([value, count]) => ({ value, count })),
-    dietary: ["vegan", "organic", "gluten_free"],
+    brands: [...brands.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    categories: [...categories.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    forms: [...forms.entries()]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value)),
+    dietary: [...dietary].sort(),
     price_min_cents: prices.length ? Math.min(...prices) : 0,
     price_max_cents: prices.length ? Math.max(...prices) : 0,
   };

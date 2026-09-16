@@ -251,6 +251,27 @@ function applyFilters(products: DemoProduct[], pq: ProductQuery & { includeInact
   });
 }
 
+type ProductFacet = "brand" | "category" | "form" | "availability" | "dietary";
+
+function facetProducts(
+  products: DemoProduct[],
+  pq: ProductQuery,
+  excluded: ReadonlySet<ProductFacet> = new Set(),
+) {
+  const scoped = applyFilters(products, {
+    ...pq,
+    brand: excluded.has("brand") ? undefined : pq.brand,
+    category: excluded.has("category") ? undefined : pq.category,
+    form: excluded.has("form") ? undefined : pq.form,
+    availability: excluded.has("availability") ? undefined : pq.availability,
+    dietary: excluded.has("dietary") ? undefined : pq.dietary,
+  });
+  if (!pq.q?.trim()) return scoped;
+  const hits = searchDocuments(scoped.map((product) => documentFromProduct(product)), pq.q);
+  const ids = new Set(hits.map((hit) => hit.id));
+  return scoped.filter((product) => ids.has(product.id));
+}
+
 function sortProducts(items: DemoProduct[], sort = "relevance"): DemoProduct[] {
   const copy = [...items];
   const byName = (a: DemoProduct, b: DemoProduct) => a.name.localeCompare(b.name);
@@ -356,21 +377,27 @@ export function suggestions(q: string): { items: SuggestionItem[] } {
   return { items: items.slice(0, 12) };
 }
 
-export function filters(): FilterOptions {
+export function filters(pq: ProductQuery = {}): FilterOptions {
   const products = getStore().products.filter(activeOnly);
   const brands = new Map<string, { name: string; slug: string; count: number }>();
   const categories = new Map<string, { name: string; slug: string; count: number }>();
   const forms = new Map<string, number>();
   let min = Number.POSITIVE_INFINITY;
   let max = 0;
-  for (const p of products) {
+  for (const p of facetProducts(products, pq, new Set(["brand"]))) {
     brands.set(p.brand_slug, { name: p.brand_name, slug: p.brand_slug, count: (brands.get(p.brand_slug)?.count ?? 0) + 1 });
+  }
+  for (const p of facetProducts(products, pq, new Set(["category"]))) {
     categories.set(p.category_slug, {
       name: p.category_name,
       slug: p.category_slug,
       count: (categories.get(p.category_slug)?.count ?? 0) + 1,
     });
+  }
+  for (const p of facetProducts(products, pq, new Set(["form"]))) {
     if (p.form) forms.set(p.form, (forms.get(p.form) ?? 0) + 1);
+  }
+  for (const p of facetProducts(products, pq)) {
     min = Math.min(min, p.effective_price_cents);
     max = Math.max(max, p.effective_price_cents);
   }
@@ -750,6 +777,7 @@ function toPublicOrder(o: AdminOrderDetail): OrderPublic {
     payment_method: o.payment_method ?? "call_store",
     payment_status: o.payment_status ?? "unpaid",
     currency: o.currency ?? "USD",
+    paid_at: o.paid_at ?? null,
     persistence: "session",
   };
 }
@@ -889,7 +917,12 @@ export function getAdminOrder(id: number) {
   return o;
 }
 
-export function updateOrderStatus(id: number, status?: string, paymentStatus?: string) {
+export function updateOrderStatus(
+  id: number,
+  status?: string,
+  paymentStatus?: string,
+  bypassPaymentRequirement = false,
+) {
   const allowed = ["placed", "confirmed", "preparing", "ready_for_pickup", "shipped", "out_for_delivery", "delivered", "completed", "cancelled"];
   if (status !== undefined && !allowed.includes(status)) {
     throw new ApiHttpError(400, `Invalid status. Allowed: ${allowed.join(", ")}`, "validation");
@@ -902,18 +935,44 @@ export function updateOrderStatus(id: number, status?: string, paymentStatus?: s
   }
   const o = getAdminOrder(id);
   const nextStatus = status ?? o.status;
+  const nextPaymentStatus = paymentStatus ?? o.payment_status ?? "unpaid";
   if (
     (o.fulfillment_type === "pickup" && ["shipped", "out_for_delivery", "delivered"].includes(nextStatus)) ||
     (o.fulfillment_type === "delivery" && nextStatus === "ready_for_pickup")
   ) {
     throw new ApiHttpError(400, "That status does not match the order fulfillment type.", "validation");
   }
+  if (
+    ["shipped", "out_for_delivery", "delivered", "completed"].includes(nextStatus) &&
+    nextPaymentStatus !== "paid" &&
+    !o.payment_requirement_bypassed &&
+    !bypassPaymentRequirement
+  ) {
+    throw new ApiHttpError(
+      409,
+      "Record payment before shipping or completing this order, or explicitly enable the admin payment bypass.",
+      "payment_required",
+    );
+  }
   if (status !== undefined) o.status = status;
   if (paymentStatus !== undefined) {
     o.payment_status = paymentStatus;
     o.paid_at = paymentStatus === "paid" ? new Date().toISOString() : null;
   }
+  if (bypassPaymentRequirement && nextPaymentStatus !== "paid") {
+    o.payment_requirement_bypassed = true;
+    o.payment_bypassed_at = new Date().toISOString();
+    o.payment_bypass_reason = "Administrator approved fulfillment before payment.";
+  }
   return o;
+}
+
+export function deleteOrder(id: number) {
+  const store = getStore();
+  const index = store.orders.findIndex((order) => order.id === id);
+  if (index === -1) throw new ApiHttpError(404, "Order not found.", "not_found");
+  const [deleted] = store.orders.splice(index, 1);
+  return { ok: true, order_id: deleted.id, order_number: deleted.order_number };
 }
 
 export function listPromotions() {

@@ -22,6 +22,18 @@ const importDeleteRoute = readFileSync(
   path.join(process.cwd(), "src/app/api/admin/catalog-imports/[batchId]/route.ts"),
   "utf8",
 );
+const orderDetail = readFileSync(
+  path.join(process.cwd(), "src/app/(admin)/admin/orders/[id]/page.tsx"),
+  "utf8",
+);
+const receiptActions = readFileSync(
+  path.join(process.cwd(), "src/components/orders/receipt-actions.tsx"),
+  "utf8",
+);
+const paymentGateMigration = readFileSync(
+  path.join(process.cwd(), "../supabase/migrations/20260916010000_order_payment_gate.sql"),
+  "utf8",
+);
 
 describe("durable call-to-confirm orders", () => {
   it("stores UUID catalog references and denies browser table access", () => {
@@ -64,6 +76,23 @@ describe("durable call-to-confirm orders", () => {
     expect(lifecycleMigration).toMatch(/admin_seen_at/i);
     expect(apiRoute).toMatch(/listAdminOrderNotifications/);
     expect(apiRoute).toMatch(/markAdminOrderSeen/);
+  });
+
+  it("offers paid receipts and confirmation-protected admin deletion", () => {
+    expect(receiptActions).toMatch(/payment_status !== "paid"/);
+    expect(receiptActions).toMatch(/Download receipt/);
+    expect(receiptActions).toMatch(/window\.print/);
+    expect(orderDetail).toMatch(/deleteConfirmation !== o\.order_number/);
+    expect(apiRoute).toMatch(/path\[1\] === "orders"[\s\S]*deleteAdminOrder/);
+  });
+
+  it("blocks unpaid fulfillment unless an admin explicitly bypasses it", () => {
+    expect(paymentGateMigration).toMatch(/orders_payment_before_fulfillment_check/i);
+    expect(paymentGateMigration).toMatch(/payment_status = 'paid'/i);
+    expect(paymentGateMigration).toMatch(/payment_requirement_bypassed = true/i);
+    expect(apiRoute).toMatch(/bypass_payment_requirement === true/);
+    expect(orderDetail).toMatch(/Manual payment bypass/);
+    expect(orderDetail).toMatch(/payment required/);
   });
 
   it("triple-checks destructive import deletion", () => {
