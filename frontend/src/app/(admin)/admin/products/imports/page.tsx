@@ -55,6 +55,7 @@ export default function ImportHistoryPage() {
         detail?: string;
         deleted_products?: number;
         retained_updated_products?: number;
+        recovered_stale_processing?: boolean;
         warning?: string;
       };
       if (!response.ok) throw new Error(data.detail || "Could not delete this import.");
@@ -63,7 +64,8 @@ export default function ImportHistoryPage() {
       const deleted = data.deleted_products ?? 0;
       const retained = data.retained_updated_products ?? 0;
       setNotice(
-        `Import deleted. ${deleted} product${deleted === 1 ? "" : "s"} created by it removed.` +
+        (data.recovered_stale_processing ? "Abandoned import recovered and deleted. " : "Import deleted. ") +
+          `${deleted} product${deleted === 1 ? "" : "s"} created by it removed.` +
           (retained
             ? ` ${retained} pre-existing product${retained === 1 ? " was" : "s were"} retained.`
             : "") +
@@ -138,8 +140,7 @@ export default function ImportHistoryPage() {
                     ) : null}
                     <button
                       type="button"
-                      disabled={batch.status === "processing"}
-                      className="text-[color:var(--danger)] underline disabled:cursor-not-allowed disabled:opacity-50"
+                      className="text-[color:var(--danger)] underline"
                       onClick={() => {
                         setDeleteTarget(batch);
                         setConfirmation("");
@@ -178,6 +179,12 @@ export default function ImportHistoryPage() {
               This permanently deletes the batch and products created by it. Products that existed before this
               import and were only updated are retained. This cannot be undone.
             </p>
+            {deleteTarget.status === "processing" ? (
+              <p className="mt-3 rounded-[--radius] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                This record is marked processing. An active import remains protected; an import abandoned for at
+                least five minutes can be recovered and deleted.
+              </p>
+            ) : null}
             <p className="mt-3 break-all text-sm"><strong>File:</strong> {deleteTarget.filename}</p>
             <label className="mt-5 block text-sm font-medium">
               Type CONFIRM to continue

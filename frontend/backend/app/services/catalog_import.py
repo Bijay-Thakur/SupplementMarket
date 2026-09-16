@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.catalog.csv_images import download_product_image, image_url_allowed
@@ -52,6 +52,59 @@ def merge_nonblank(existing: Any, incoming: Any) -> Any:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _recent_processing_lease(batch: dict[str, Any]) -> bool:
+    """Return true only while a processing request could still be alive."""
+    if batch.get("status") != "processing":
+        return False
+    raw_timestamp = batch.get("started_at") or batch.get("created_at")
+    if not raw_timestamp:
+        return True
+    try:
+        started_at = datetime.fromisoformat(str(raw_timestamp).replace("Z", "+00:00"))
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return True
+    return started_at > datetime.now(timezone.utc) - timedelta(minutes=5)
+
+
+def _storage_paths_for_products(product_ids: list[str]) -> list[str]:
+    """Load image paths in bounded requests so large imports do not exceed URL limits."""
+    storage_paths: set[str] = set()
+    for offset in range(0, len(product_ids), 50):
+        chunk = product_ids[offset : offset + 50]
+        images = sb.select(
+            "product_images",
+            {
+                "select": "storage_path",
+                "product_id": f"in.({','.join(chunk)})",
+            },
+        )
+        storage_paths.update(
+            str(image["storage_path"])
+            for image in images
+            if image.get("storage_path")
+            and not str(image["storage_path"]).startswith(("http://", "https://"))
+        )
+    return sorted(storage_paths)
+
+
+def _cleanup_storage_paths(storage_paths: list[str]) -> int:
+    """Delete known storage objects concurrently and return the failure count."""
+    if not storage_paths:
+        return 0
+
+    def remove(object_path: str) -> bool:
+        try:
+            sb.delete_object("product-images", object_path)
+            return True
+        except Exception:
+            return False
+
+    with ThreadPoolExecutor(max_workers=min(8, len(storage_paths))) as executor:
+        return sum(1 for removed in executor.map(remove, storage_paths) if not removed)
 
 
 def _public_batch(batch: dict[str, Any]) -> dict[str, Any]:
@@ -815,12 +868,6 @@ def commit_csv(batch_id: str, *, included_row_numbers: list[int] | None, force_r
                 else:
                     updated += 1
                 detected = action
-                _try_attach_image(
-                    row,
-                    brand["slug"],
-                    product.get("slug") or product["id"],
-                    product["id"],
-                )
             else:
                 product = sb.insert(
                     "products",
@@ -868,14 +915,22 @@ def commit_csv(batch_id: str, *, included_row_numbers: list[int] | None, force_r
                 committed_variant_id = variant["id"]
                 inserted += 1
                 detected = "insert"
-                _try_attach_image(row, brand["slug"], product["slug"], product["id"])
 
+            # Persist ownership before the slower image download. If the
+            # serverless request is terminated during image work, stale-import
+            # recovery can still find and remove the product it created.
             _record_import_row(
                 batch_row["id"],
                 row,
                 detected,
                 committed_product_id=committed_product_id,
                 committed_variant_id=committed_variant_id,
+            )
+            _try_attach_image(
+                row,
+                brand["slug"],
+                product.get("slug") or product["id"],
+                product["id"],
             )
     except Exception:
         sb.update(
@@ -956,12 +1011,18 @@ def delete_batch(batch_id: str, confirmation: str) -> dict[str, Any]:
 
     batches = sb.select(
         "catalog_import_batches",
-        {"select": "id,status", "id": f"eq.{normalized_batch_id}", "limit": "1"},
+        {
+            "select": "id,status,started_at,created_at",
+            "id": f"eq.{normalized_batch_id}",
+            "limit": "1",
+        },
     )
     if not batches:
         raise NotFoundError("Import batch not found.")
-    if batches[0].get("status") == "processing":
-        raise ConflictError("An import cannot be deleted while it is processing.")
+    if _recent_processing_lease(batches[0]):
+        raise ConflictError(
+            "This import is still active. If it was interrupted, wait five minutes and try again."
+        )
 
     rows = sb.select(
         "catalog_import_rows",
@@ -977,21 +1038,7 @@ def delete_batch(batch_id: str, confirmation: str) -> dict[str, Any]:
             if row.get("detected_action") == "insert" and row.get("committed_product_id")
         }
     )
-    storage_paths: list[str] = []
-    if inserted_product_ids:
-        images = sb.select(
-            "product_images",
-            {
-                "select": "storage_path",
-                "product_id": f"in.({','.join(inserted_product_ids)})",
-            },
-        )
-        storage_paths = [
-            str(image["storage_path"])
-            for image in images
-            if image.get("storage_path")
-            and not str(image["storage_path"]).startswith(("http://", "https://"))
-        ]
+    storage_paths = _storage_paths_for_products(inserted_product_ids)
 
     result = sb.rpc(
         "delete_catalog_import",
@@ -999,20 +1046,72 @@ def delete_batch(batch_id: str, confirmation: str) -> dict[str, Any]:
     )
     _BATCHES.pop(normalized_batch_id, None)
 
-    failed_storage_cleanup = 0
-    for object_path in storage_paths:
-        try:
-            sb.delete_object("product-images", object_path)
-        except Exception:
-            # The database transaction is authoritative. A stale object is not
-            # allowed to make the already-completed deletion appear to fail.
-            failed_storage_cleanup += 1
+    # The database transaction is authoritative. Stale objects are reported
+    # without making the already-completed deletion appear to fail.
+    failed_storage_cleanup = _cleanup_storage_paths(storage_paths)
 
     payload = result if isinstance(result, dict) else {"ok": True, "batch_id": normalized_batch_id}
     payload["deleted_image_objects"] = len(storage_paths) - failed_storage_cleanup
     if failed_storage_cleanup:
         payload["warning"] = (
             f"The import was deleted, but {failed_storage_cleanup} unreferenced image "
+            "object(s) could not be removed from storage."
+        )
+    return payload
+
+
+def delete_product(product_id: str, confirmation: str) -> dict[str, Any]:
+    """Permanently delete one catalog product and clean up its stored images."""
+    if confirmation != "CONFIRM":
+        raise ValidationError("Type CONFIRM to delete this product.")
+    try:
+        normalized_product_id = str(uuid.UUID(product_id))
+    except (TypeError, ValueError, AttributeError):
+        raise ValidationError("Invalid product identifier.") from None
+
+    products = sb.select(
+        "products",
+        {
+            "select": "id,name",
+            "id": f"eq.{normalized_product_id}",
+            "limit": "1",
+        },
+    )
+    if not products:
+        raise NotFoundError("Product not found.")
+
+    images = sb.select(
+        "product_images",
+        {"select": "storage_path", "product_id": f"eq.{normalized_product_id}"},
+    )
+    storage_paths = [
+        str(image["storage_path"])
+        for image in images
+        if image.get("storage_path")
+        and not str(image["storage_path"]).startswith(("http://", "https://"))
+    ]
+
+    result = sb.rpc(
+        "delete_catalog_product",
+        {
+            "p_product_id": normalized_product_id,
+            "p_confirmation": confirmation,
+        },
+    )
+
+    # The database deletion is authoritative; unreferenced storage objects are
+    # reported without misrepresenting the database result.
+    failed_storage_cleanup = _cleanup_storage_paths(storage_paths)
+
+    payload = result if isinstance(result, dict) else {
+        "ok": True,
+        "product_id": normalized_product_id,
+        "product_name": products[0].get("name"),
+    }
+    payload["deleted_image_objects"] = len(storage_paths) - failed_storage_cleanup
+    if failed_storage_cleanup:
+        payload["warning"] = (
+            f"The product was deleted, but {failed_storage_cleanup} unreferenced image "
             "object(s) could not be removed from storage."
         )
     return payload

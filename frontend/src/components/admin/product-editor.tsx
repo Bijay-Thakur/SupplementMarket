@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   adminCreateProduct,
+  adminDeleteProduct,
   adminGetProduct,
   adminUpdateProduct,
   adminUploadProductImage,
@@ -12,7 +13,7 @@ import {
   listCategories,
   listTags,
 } from "@/lib/api/catalog";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { discountPercent, formatCents, parseDollarsToCents, saleFromPercent } from "@/lib/money";
 import { ApiRequestError } from "@/lib/api/client";
 import { DIETARY_LABELS } from "@/lib/catalog-copy";
@@ -36,6 +37,10 @@ export function ProductEditor({ productId }: Props) {
   const [pending, setPending] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     sku: "",
@@ -237,9 +242,26 @@ export function ProductEditor({ productId }: Props) {
     }
   }
 
+  async function onDelete() {
+    if (!productId || deleteConfirmation !== "CONFIRM") return;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await adminDeleteProduct(productId, deleteConfirmation);
+      setDirty(false);
+      router.replace("/admin/products");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(err instanceof ApiRequestError ? err.message : "Product deletion failed.");
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
   const dietaryKeys = useMemo(() => Object.keys(DIETARY_LABELS) as (keyof typeof DIETARY_LABELS)[], []);
 
   return (
+    <>
     <form onSubmit={onSave} className="max-w-3xl space-y-8">
       <h1 className="font-display text-3xl font-semibold">
         {productId ? "Edit product" : "New product"}
@@ -462,10 +484,88 @@ export function ProductEditor({ productId }: Props) {
       </Section>
 
       {error && <p className="text-[color:var(--danger)]">{error}</p>}
-      <button type="submit" disabled={pending} className={buttonVariants({ size: "lg" })}>
-        {pending ? "Saving…" : "Save product"}
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="submit" disabled={pending || deletePending} className={buttonVariants({ size: "lg" })}>
+          {pending ? "Saving…" : "Save product"}
+        </button>
+        {productId ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending || deletePending}
+            className="border-[color:var(--danger)] text-[color:var(--danger)] hover:bg-red-50"
+            onClick={() => {
+              setDeleteOpen(true);
+              setDeleteConfirmation("");
+              setDeleteError(null);
+            }}
+          >
+            Delete product
+          </Button>
+        ) : null}
+      </div>
     </form>
+
+    {deleteOpen ? (
+      <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 px-4" role="presentation">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-product-title"
+          className="w-full max-w-lg rounded-[--radius-lg] border border-[color:var(--border)] bg-surface p-6 shadow-2xl"
+        >
+          <h2 id="delete-product-title" className="font-display text-2xl font-semibold">
+            Permanently delete this product?
+          </h2>
+          <p className="mt-3 text-sm text-[color:var(--muted)]">
+            This removes the product, variants, tags, and catalog images. Existing orders keep their saved
+            product name, quantity, and price. This cannot be undone.
+          </p>
+          <p className="mt-3 break-words text-sm"><strong>Product:</strong> {form.name}</p>
+          <label className="mt-5 block text-sm font-medium">
+            Type CONFIRM to continue
+            <input
+              autoFocus
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
+              autoComplete="off"
+            />
+          </label>
+          {deleteError ? (
+            <p className="mt-3 text-sm text-[color:var(--danger)]" role="alert">{deleteError}</p>
+          ) : null}
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletePending}
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteConfirmation("");
+                setDeleteError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={deletePending || deleteConfirmation !== "CONFIRM"}
+              onClick={onDelete}
+              className="bg-[color:var(--danger)] hover:brightness-90"
+            >
+              {deletePending ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent" />
+                  Deleting…
+                </>
+              ) : "Delete permanently"}
+            </Button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }
 

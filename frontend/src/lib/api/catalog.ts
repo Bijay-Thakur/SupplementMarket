@@ -126,6 +126,19 @@ export function adminArchiveProduct(id: number | string) {
   return apiFetch<ProductDetail>(`/api/v1/admin/products/${id}`, { method: "DELETE" });
 }
 
+export function adminDeleteProduct(id: number | string, confirmation: string) {
+  return apiFetch<{
+    ok: boolean;
+    product_id: string;
+    product_name?: string;
+    deleted_image_objects?: number;
+    warning?: string;
+  }>(`/api/v1/admin/products/${id}/permanent`, {
+    method: "DELETE",
+    body: JSON.stringify({ confirmation }),
+  });
+}
+
 export function adminUploadProductImage(id: number | string, file: File, altText = "") {
   const body = new FormData();
   body.append("file", file);

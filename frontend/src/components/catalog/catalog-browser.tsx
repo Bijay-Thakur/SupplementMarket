@@ -49,6 +49,17 @@ export function CatalogBrowser({
     router.push(`${pathname}?${next.toString()}`);
   }
 
+  function chooseBrand(slug: string | null) {
+    if (slug && locked?.category) {
+      // A category detail URL cannot shed its locked category. Move to the
+      // canonical brand page so "view by brand" does not create an accidental
+      // empty brand + category intersection.
+      router.push(`/brands/${encodeURIComponent(slug)}`);
+      return;
+    }
+    update((next) => setParam(next, "brand", slug));
+  }
+
   const query = useQuery({
     queryKey: ["products", { q, brand, category, form, availability, dietary, onSale, isNew, bestseller, sort, page }],
     queryFn: () =>
@@ -127,9 +138,7 @@ export function CatalogBrowser({
                 key={b.slug}
                 active={brand === b.slug}
                 label={`${b.name} (${b.count})`}
-                onClick={() =>
-                  update((n) => setParam(n, "brand", brand === b.slug ? null : b.slug))
-                }
+                onClick={() => chooseBrand(brand === b.slug ? null : b.slug)}
               />
             ))}
           </FilterGroup>
@@ -240,7 +249,21 @@ export function CatalogBrowser({
               Could not load the catalog. Please refresh and try again.
             </p>
           )}
-          {query.data && <ProductGrid products={query.data.items} />}
+          {query.data && query.data.items.length === 0 && locked?.category && brand ? (
+            <div className="rounded-[--radius] border border-dashed border-[color:var(--border)] bg-surface px-4 py-12 text-center text-[color:var(--muted)]">
+              <p>This brand has no products in this category.</p>
+              <button
+                type="button"
+                className="mt-3 font-semibold text-[color:var(--brand-magenta)] underline"
+                onClick={() => router.push(`/brands/${encodeURIComponent(brand)}`)}
+              >
+                View all products from this brand
+              </button>
+            </div>
+          ) : null}
+          {query.data && !(query.data.items.length === 0 && locked?.category && brand) ? (
+            <ProductGrid products={query.data.items} />
+          ) : null}
 
           {query.data && query.data.pages > 1 && (
             <div className="mt-8 flex justify-center gap-2">

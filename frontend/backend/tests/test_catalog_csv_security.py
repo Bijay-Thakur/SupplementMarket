@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from app.catalog.csv_images import image_url_allowed, sniff_image
 from app.catalog.csv_parse import parse_catalog_csv
-from app.core.errors import ValidationError
+from app.core.errors import ConflictError, ValidationError
 from app.services.catalog_import import merge_nonblank
 
 FIXTURE = Path(__file__).resolve().parents[3] / "docs" / "Vital Planet Order Form 9.2.26.csv"
@@ -476,3 +477,99 @@ def test_import_delete_only_targets_inserted_product_images(monkeypatch) -> None
     assert result["deleted_products"] == 1
     assert result["retained_updated_products"] == 1
     assert result["deleted_image_objects"] == 1
+
+
+def test_recent_processing_import_remains_protected(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    class DummySb:
+        @staticmethod
+        def select(table, _params):
+            assert table == "catalog_import_batches"
+            return [
+                {
+                    "id": "00000000-0000-4000-a000-000000000001",
+                    "status": "processing",
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": None,
+                }
+            ]
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    with pytest.raises(ConflictError, match="still active"):
+        ci.delete_batch("00000000-0000-4000-a000-000000000001", "CONFIRM")
+
+
+def test_stale_processing_import_can_be_recovered(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    batch_id = "00000000-0000-4000-a000-000000000001"
+    calls: list[tuple[str, dict]] = []
+
+    class DummySb:
+        @staticmethod
+        def select(table, _params):
+            if table == "catalog_import_batches":
+                return [
+                    {
+                        "id": batch_id,
+                        "status": "processing",
+                        "started_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(),
+                        "created_at": None,
+                    }
+                ]
+            return []
+
+        @staticmethod
+        def rpc(function, payload):
+            calls.append((function, payload))
+            return {"ok": True, "recovered_stale_processing": True}
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    result = ci.delete_batch(batch_id, "CONFIRM")
+
+    assert result["recovered_stale_processing"] is True
+    assert calls == [("delete_catalog_import", {"p_batch_id": batch_id, "p_confirmation": "CONFIRM"})]
+
+
+def test_product_delete_requires_confirmation_and_cleans_owned_images(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    product_id = "00000000-0000-4000-a000-000000000010"
+    calls: list[tuple[str, dict]] = []
+    deleted_objects: list[tuple[str, str]] = []
+
+    class DummySb:
+        @staticmethod
+        def select(table, _params):
+            if table == "products":
+                return [{"id": product_id, "name": "Zinc"}]
+            if table == "product_images":
+                return [
+                    {"storage_path": "now/zinc/front.png"},
+                    {"storage_path": "https://manufacturer.example/zinc.png"},
+                ]
+            return []
+
+        @staticmethod
+        def rpc(function, payload):
+            calls.append((function, payload))
+            return {"ok": True, "product_id": product_id, "product_name": "Zinc"}
+
+        @staticmethod
+        def delete_object(bucket, object_path):
+            deleted_objects.append((bucket, object_path))
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    with pytest.raises(ValidationError, match="Type CONFIRM"):
+        ci.delete_product(product_id, "confirm")
+
+    result = ci.delete_product(product_id, "CONFIRM")
+    assert result["product_name"] == "Zinc"
+    assert calls == [
+        (
+            "delete_catalog_product",
+            {"p_product_id": product_id, "p_confirmation": "CONFIRM"},
+        )
+    ]
+    assert deleted_objects == [("product-images", "now/zinc/front.png")]

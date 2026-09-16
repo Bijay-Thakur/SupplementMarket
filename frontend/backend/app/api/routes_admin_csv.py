@@ -549,6 +549,17 @@ async def upload_product_image(
     return {"ok": True, "storage_path": object_path}
 
 
+@router.delete("/products/{product_id}/permanent")
+def delete_product_permanently(product_id: str, body: dict[str, Any], request: Request):
+    origin = request.headers.get("origin")
+    if origin and origin != settings.frontend_origin:
+        raise ForbiddenError("Invalid request origin.")
+    return catalog_import.delete_product(
+        product_id,
+        str(body.get("confirmation") or ""),
+    )
+
+
 @router.delete("/products/{product_id}")
 def archive_product(product_id: str):
     sb.update("products", {"id": f"eq.{product_id}"}, {"status": "archived"})

@@ -558,6 +558,32 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       deleteAddress(user.id, path[2]);
       return json({ ok: true });
     }
+    if (
+      path[0] === "admin" &&
+      path[1] === "products" &&
+      path.length === 4 &&
+      path[3] === "permanent"
+    ) {
+      await requireAdmin(req);
+      const body = await readJson(req);
+      if (body.confirmation !== "CONFIRM") {
+        throw new ApiHttpError(422, "Type CONFIRM to delete this product.", "validation_error");
+      }
+      if (getDataProvider() !== "supabase") {
+        throw new ApiHttpError(
+          400,
+          "Permanent product deletion is only available for the live catalog.",
+          "not_supported",
+        );
+      }
+      const deleted = await fastapiAdmin(`/products/${path[2]}/permanent`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: body.confirmation }),
+      });
+      revalidateStorefront();
+      return json(deleted);
+    }
     if (path[0] === "admin" && path[1] === "products" && path.length === 3) {
       await requireAdmin(req);
       if (getDataProvider() === "supabase") {
