@@ -51,6 +51,13 @@ describe("catalog recovery and deletion", () => {
     expect(apiRoute).toMatch(/repo\.filters\(productQuery\(sp\)\)/);
   });
 
+  it("paginates Supabase reads past the 1,000-row response cap", () => {
+    expect(liveCatalog).toMatch(/SUPABASE_PAGE_SIZE = 1000/);
+    expect(liveCatalog).toMatch(/fetchAllSupabaseRows/);
+    expect(liveCatalog).toMatch(/\.range\(from, to\)/);
+    expect(liveCatalog).toMatch(/page\.length < SUPABASE_PAGE_SIZE/);
+  });
+
   it("removes only the normalized Nature's Plus brand identity", () => {
     expect(cleanupMigration).toMatch(/naturesplus/i);
     expect(cleanupMigration).toMatch(/delete from public\.products/i);

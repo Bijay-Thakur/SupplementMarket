@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import rate_limit_search
@@ -72,22 +72,58 @@ def suggestions(
     _rl: None = Depends(rate_limit_search),
     q: str = Query(default="", max_length=100),
 ):
-    """Lightweight typeahead: names/brands matching the expanded query."""
+    """Lightweight typeahead with catalog-wide category and brand routes."""
     q = (q or "").strip()
     if len(q) < 2:
         return {"items": []}
+
+    like = f"%{q.lower()}%"
+    categories = db.execute(
+        select(Category)
+        .where(or_(func.lower(Category.name).like(like), func.lower(Category.slug).like(like)))
+        .order_by(Category.name)
+        .limit(4)
+    ).scalars().all()
+    brands = db.execute(
+        select(Brand)
+        .where(or_(func.lower(Brand.name).like(like), func.lower(Brand.slug).like(like)))
+        .order_by(Brand.name)
+        .limit(4)
+    ).scalars().all()
     pq = ProductQuery(q=q, sort="relevance", page=1, page_size=8)
     items, _ = repo.search_products(db, pq)
     return {
-        "items": [
-            {
-                "name": p.name,
-                "slug": p.slug,
-                "brand_name": p.brand.name if p.brand else "",
-                "match_reason": "Matches catalog search",
-            }
-            for p in items
-        ]
+        "items": (
+            [
+                {
+                    "type": "category",
+                    "name": category.name,
+                    "slug": category.slug,
+                    "href": f"/categories/{category.slug}",
+                }
+                for category in categories
+            ]
+            + [
+                {
+                    "type": "brand",
+                    "name": brand.name,
+                    "slug": brand.slug,
+                    "href": f"/brands/{brand.slug}",
+                }
+                for brand in brands
+            ]
+            + [
+                {
+                    "type": "product",
+                    "name": p.name,
+                    "slug": p.slug,
+                    "href": f"/products/{p.slug}",
+                    "brand_name": p.brand.name if p.brand else "",
+                    "match_reason": "Matches catalog search",
+                }
+                for p in items
+            ]
+        )[:12]
     }
 
 

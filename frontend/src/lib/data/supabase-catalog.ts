@@ -17,6 +17,26 @@ import type {
 import { PUBLIC_VARIANT_COLUMNS } from "./public-variant-columns";
 import { orderDashboardSummary } from "./supabase-orders";
 
+const SUPABASE_PAGE_SIZE = 1000;
+
+type SupabasePage<T> = {
+  data: T[] | null;
+  error: { message?: string } | null;
+};
+
+async function fetchAllSupabaseRows<T>(
+  readPage: (from: number, to: number) => PromiseLike<SupabasePage<T>>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await readPage(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) return rows;
+  }
+}
+
 function mediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith("http")) return path;
@@ -97,14 +117,17 @@ function mapProduct(row: Record<string, unknown>): ProductDetail {
 async function fetchActiveProducts(): Promise<ProductDetail[]> {
   const client = getSupabaseAdminClient();
   if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
-  const { data, error } = await client
-    .from("products")
-    .select(
-      `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`,
-    )
-    .eq("status", "active");
-  if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
-  return (data ?? []).map((row) => mapProduct(row as Record<string, unknown>));
+  const data = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
+    client
+      .from("products")
+      .select(
+        `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`,
+      )
+      .eq("status", "active")
+      .order("id")
+      .range(from, to),
+  );
+  return data.map((row) => mapProduct(row));
 }
 
 function pageOf<T>(items: T[], page = 1, pageSize = 24): Page<T> {
@@ -233,15 +256,58 @@ export async function relatedFor(slug: string) {
 }
 
 export async function suggestions(q: string) {
-  const { items } = await listProducts({ q, page: 1, page_size: 8, sort: "relevance" });
+  const query = q.trim();
+  if (query.length < 2) return { items: [] };
+
+  const all = await fetchActiveProducts();
+  const needle = query.toLocaleLowerCase();
+  const categories = new Map<string, string>();
+  const brands = new Map<string, string>();
+  for (const product of all) {
+    if (product.category_slug && product.category_name) {
+      categories.set(product.category_slug, product.category_name);
+    }
+    if (product.brand_slug && product.brand_name) {
+      brands.set(product.brand_slug, product.brand_name);
+    }
+  }
+
+  const taxonomyItems = [
+    ...[...categories]
+      .filter(([slug, name]) => slug.toLocaleLowerCase().includes(needle) || name.toLocaleLowerCase().includes(needle))
+      .map(([slug, name]) => ({ type: "category", name, slug, href: `/categories/${slug}` })),
+    ...[...brands]
+      .filter(([slug, name]) => slug.toLocaleLowerCase().includes(needle) || name.toLocaleLowerCase().includes(needle))
+      .map(([slug, name]) => ({ type: "brand", name, slug, href: `/brands/${slug}` })),
+  ].sort((a, b) => {
+    const exactA = a.name.toLocaleLowerCase() === needle ? 0 : 1;
+    const exactB = b.name.toLocaleLowerCase() === needle ? 0 : 1;
+    return exactA - exactB || a.name.localeCompare(b.name);
+  });
+
+  const matchingProducts = filterCatalog(all, { q: query });
+  const rank = new Map(
+    searchDocuments(matchingProducts.map((product) => documentFromProduct(product)), query).map(
+      (hit, index) => [String(hit.id), index],
+    ),
+  );
+  matchingProducts.sort(
+    (a, b) =>
+      (rank.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER) -
+      (rank.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER),
+  );
+
   return {
-    items: items.map((p) => ({
-      type: "product",
-      name: p.name,
-      slug: p.slug,
-      href: `/products/${p.slug}`,
-      brand_name: p.brand_name,
-    })),
+    items: [
+      ...taxonomyItems,
+      ...matchingProducts.slice(0, 8).map((product) => ({
+        type: "product",
+        name: product.name,
+        slug: product.slug,
+        href: `/products/${product.slug}`,
+        brand_name: product.brand_name,
+      })),
+    ].slice(0, 12),
   };
 }
 
@@ -336,21 +402,35 @@ export async function dashboard() {
   const client = getSupabaseAdminClient();
   if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
 
-  const [productsRes, brandsRes, categoriesRes, imagesRes, batchesRes, variantsRes, orders] = await Promise.all([
-    client.from("products").select("id,status,is_new"),
+  const [productRows, brandsRes, categoriesRes, imageRows, batchesRes, variantRows, orders] = await Promise.all([
+    fetchAllSupabaseRows<{ id: string; status: string; is_new: boolean }>((from, to) =>
+      client.from("products").select("id,status,is_new").order("id").range(from, to),
+    ),
     client.from("brands").select("id", { count: "exact", head: true }),
     client.from("categories").select("id", { count: "exact", head: true }),
-    client.from("product_images").select("product_id"),
+    fetchAllSupabaseRows<{ id: string; product_id: string }>((from, to) =>
+      client.from("product_images").select("id,product_id").order("id").range(from, to),
+    ),
     client.from("catalog_import_batches").select("id", { count: "exact", head: true }),
-    client.from("product_variants").select("product_id,regular_price_cents,sale_price_cents"),
+    fetchAllSupabaseRows<{
+      id: string;
+      product_id: string;
+      regular_price_cents: number;
+      sale_price_cents: number | null;
+    }>((from, to) =>
+      client
+        .from("product_variants")
+        .select("id,product_id,regular_price_cents,sale_price_cents")
+        .order("id")
+        .range(from, to),
+    ),
     orderDashboardSummary(),
   ]);
 
-  const rows = productsRes.data ?? [];
-  const live = rows.filter((row) => row.status !== "archived");
-  const imaged = new Set((imagesRes.data ?? []).map((row) => String(row.product_id)));
+  const live = productRows.filter((row) => row.status !== "archived");
+  const imaged = new Set(imageRows.map((row) => String(row.product_id)));
   const onSaleIds = new Set(
-    (variantsRes.data ?? [])
+    variantRows
       .filter((row) => {
         const sale = row.sale_price_cents == null ? null : Number(row.sale_price_cents);
         const regular = Number(row.regular_price_cents ?? 0);

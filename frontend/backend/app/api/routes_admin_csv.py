@@ -5,7 +5,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 
 from app.api.deps import require_supabase_admin
 from app.catalog.csv_images import sniff_image
@@ -314,13 +314,34 @@ def delete_import(batch_id: str, body: dict[str, Any], request: Request):
 
 
 @router.get("/products")
-def list_products(q: str | None = None, brand: str | None = None, category: str | None = None, availability: str | None = None):
-    params: dict[str, str] = {
-        "select": "id,name,slug,status,brand_id,category_id,is_featured,is_best_seller,is_new,short_description,description,suggested_use,warnings,search_aliases,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,size_value,size_unit,strength_value,strength_unit,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(id,storage_path,is_primary,alt_text,display_order),product_tags(tag_type,tag)",
-        "order": "updated_at.desc",
-        "limit": "200",
-    }
-    rows = sb.select("products", params)
+def list_products(
+    q: str | None = Query(default=None, max_length=100),
+    brand: str | None = None,
+    category: str | None = None,
+    availability: str | None = None,
+    on_sale: bool | None = None,
+    sort: str = "newest",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+):
+    select_columns = "id,name,slug,status,brand_id,category_id,is_featured,is_best_seller,is_new,short_description,description,suggested_use,warnings,search_aliases,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(sku,upc,supplier_sku,form,unit_count,size_value,size_unit,strength_value,strength_unit,regular_price_cents,sale_price_cents,cost_price_cents,availability,is_default),product_images(id,storage_path,is_primary,alt_text,display_order),product_tags(tag_type,tag)"
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        batch = sb.select(
+            "products",
+            {
+                "select": select_columns,
+                "order": "updated_at.desc,id.asc",
+                "limit": "1000",
+                "offset": str(offset),
+            },
+        )
+        rows.extend(batch)
+        if len(batch) < 1000:
+            break
+        offset += 1000
+
     items = [_public_product(row, include_cost=True) for row in rows]
     needle = (q or "").strip().lower()
     if needle:
@@ -338,7 +359,29 @@ def list_products(q: str | None = None, brand: str | None = None, category: str 
         items = [item for item in items if item.get("category_slug") == category]
     if availability:
         items = [item for item in items if item.get("availability") == availability]
-    return {"items": items, "total": len(items), "page": 1, "page_size": len(items), "pages": 1}
+    if on_sale is not None:
+        items = [item for item in items if bool(item.get("on_sale")) is on_sale]
+
+    if sort == "name_asc":
+        items.sort(key=lambda item: str(item.get("name") or "").lower())
+    elif sort == "name_desc":
+        items.sort(key=lambda item: str(item.get("name") or "").lower(), reverse=True)
+    elif sort == "price_asc":
+        items.sort(key=lambda item: int(item.get("effective_price_cents") or 0))
+    elif sort == "price_desc":
+        items.sort(key=lambda item: int(item.get("effective_price_cents") or 0), reverse=True)
+
+    total = len(items)
+    start = (page - 1) * page_size
+    paged_items = items[start : start + page_size]
+    pages = (total + page_size - 1) // page_size if page_size else 0
+    return {
+        "items": paged_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+    }
 
 
 @router.get("/products/{product_id}")

@@ -29,7 +29,7 @@ export function HeaderSearch({ className }: { className?: string }) {
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(-1);
   const [items, setItems] = useState<Item[]>([]);
   const box = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
@@ -47,6 +47,7 @@ export function HeaderSearch({ className }: { className?: string }) {
         .then((r) => {
           if (id !== seq.current) return;
           setItems(r.items);
+          setActive(-1);
         })
         .catch(() => {
           if (id !== seq.current) return;
@@ -106,9 +107,15 @@ export function HeaderSearch({ className }: { className?: string }) {
           aria-controls={suggestionsId}
           aria-autocomplete="list"
           onChange={(e) => {
-            setValue(e.target.value);
+            const nextValue = e.target.value;
+            seq.current += 1;
+            setValue(nextValue);
             setOpen(true);
-            setActive(0);
+            setActive(-1);
+            if (nextValue.trim().length < 2) {
+              setItems([]);
+              setLoading(false);
+            }
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
@@ -123,9 +130,9 @@ export function HeaderSearch({ className }: { className?: string }) {
             }
             if (e.key === "ArrowUp") {
               e.preventDefault();
-              setActive((i) => Math.max(i - 1, 0));
+              setActive((i) => (i <= 0 ? items.length - 1 : i - 1));
             }
-            if (e.key === "Enter" && items[active]) {
+            if (e.key === "Enter" && active >= 0 && items[active]) {
               e.preventDefault();
               const item = items[active];
               go(item.href || `/products/${item.slug}`, value.trim());

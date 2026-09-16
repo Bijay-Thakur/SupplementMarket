@@ -213,3 +213,5 @@ def test_suggestions(client, product):
     r = client.get("/api/v1/products/suggestions", params={"q": "vita"})
     assert r.status_code == 200
     assert any("Vitamin" in i["name"] for i in r.json()["items"])
+    category = next(i for i in r.json()["items"] if i.get("type") == "category")
+    assert category["href"] == "/categories/vitamin-d"
