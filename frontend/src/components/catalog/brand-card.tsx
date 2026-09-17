@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import type { Brand } from "@/lib/api/types";
 
@@ -13,13 +16,13 @@ export function BrandCard({
   brand: Brand;
   className?: string;
 }) {
-  const showLogo = Boolean(brand.logo_url);
-  const pending = brand.logo_use_status !== "approved";
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const showLogo = approvedLogo(brand) && failedLogo !== brand.logo_url;
   return (
     <Link
       href={`/brands/${brand.slug}`}
       className={cn(
-        "flex h-40 flex-col items-center justify-center rounded-[--radius-lg] border border-[color:var(--border)] bg-[color:var(--brand-cream)] p-5 text-center hover:border-[color:var(--brand-green)]",
+        "group flex h-44 flex-col items-center justify-center rounded-[--radius-lg] border border-[color:var(--border)] bg-[color:var(--brand-cream)] p-5 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--brand-magenta)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-magenta)] focus-visible:ring-offset-2",
         className,
       )}
     >
@@ -31,6 +34,7 @@ export function BrandCard({
             src={brand.logo_url ?? ""}
             alt={brand.logo_alt || brand.name}
             className="max-h-16 max-w-full object-contain"
+            onError={() => setFailedLogo(brand.logo_url ?? "")}
           />
         </span>
       ) : (
@@ -44,9 +48,9 @@ export function BrandCard({
           Featured
         </span>
       )}
-      {showLogo && pending && (
-        <span className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--muted)]">
-          Logo permission pending
+      {brand.product_count != null && (
+        <span className="mt-1 text-xs text-[color:var(--muted)]">
+          {brand.product_count} {brand.product_count === 1 ? "product" : "products"}
         </span>
       )}
     </Link>

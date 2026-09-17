@@ -87,6 +87,7 @@ export type Brand = {
   logo_use_status?: "permission_pending" | "approved" | "unavailable" | string | null;
   logo_background?: string | null;
   display_order?: number;
+  product_count?: number;
 };
 
 export type Category = {

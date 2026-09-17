@@ -193,9 +193,17 @@ export function CatalogBrowser({
           </FilterGroup>
           <FilterGroup label="Dietary">
             {(filters.data?.dietary ?? Object.keys(DIETARY_LABELS)).map((d) => (
-              <label key={d} className="flex items-center gap-2 py-1">
+              <label
+                key={d}
+                className={cn(
+                  "flex items-center gap-2 rounded border border-transparent px-2 py-1",
+                  dietary.includes(d) &&
+                    "border-[color:var(--brand-magenta)] bg-[color:var(--brand-magenta)]/10 font-semibold text-[color:var(--brand-magenta)]",
+                )}
+              >
                 <input
                   type="checkbox"
+                  className="accent-[color:var(--brand-magenta)]"
                   checked={dietary.includes(d)}
                   onChange={() =>
                     update((n) => {
@@ -357,9 +365,11 @@ function FilterLink({
       type="button"
       onClick={onClick}
       className={cn(
-        "block w-full min-w-0 break-words rounded px-2 py-1 text-left hover:bg-[color:var(--brand-cream)]",
-        active && "bg-[color:var(--brand-cream)] font-semibold",
+        "block w-full min-w-0 break-words rounded border border-transparent px-2 py-1 text-left transition hover:bg-[color:var(--brand-cream)]",
+        active &&
+          "border-[color:var(--brand-magenta)] bg-[color:var(--brand-magenta)]/10 font-semibold text-[color:var(--brand-magenta)] shadow-sm",
       )}
+      aria-pressed={active}
     >
       {label}
     </button>

@@ -39,7 +39,7 @@ async function fetchAllSupabaseRows<T>(
 
 function mediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
-  if (path.startsWith("http")) return path;
+  if (path.startsWith("http") || path.startsWith("/")) return path;
   const base = publicEnv.supabaseUrl?.replace(/\/$/, "");
   return base ? `${base}/storage/v1/object/public/product-images/${path}` : path;
 }
@@ -355,15 +355,47 @@ export async function filters(pq: ProductQuery = {}): Promise<FilterOptions> {
 export async function listBrands(): Promise<Brand[]> {
   const client = getSupabaseAdminClient();
   if (!client) return [];
-  const { data } = await client.from("brands").select("id,name,slug,description,is_featured,display_order,discount_percent").eq("is_active", true);
-  return (data ?? []).map((b) => ({
-    id: String(b.id),
-    name: String(b.name ?? ""),
-    slug: String(b.slug ?? ""),
-    description: (b.description as string | null) ?? null,
-    is_featured: Boolean(b.is_featured),
-    discount_percent: b.discount_percent == null ? null : Number(b.discount_percent),
-  }));
+  const [brandRows, activeProductRows] = await Promise.all([
+    fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
+      client
+        .from("brands")
+        .select("id,name,slug,description,is_featured,display_order,discount_percent,logo_path,website_url")
+        .eq("is_active", true)
+        .order("display_order")
+        .order("name")
+        .range(from, to),
+    ),
+    fetchAllSupabaseRows<{ brand_id: string | null }>((from, to) =>
+      client
+        .from("products")
+        .select("brand_id")
+        .eq("status", "active")
+        .order("id")
+        .range(from, to),
+    ),
+  ]);
+  const productCounts = new Map<string, number>();
+  for (const product of activeProductRows) {
+    if (!product.brand_id) continue;
+    productCounts.set(product.brand_id, (productCounts.get(product.brand_id) ?? 0) + 1);
+  }
+  return brandRows
+    .map((brand) => ({
+      id: String(brand.id),
+      name: String(brand.name ?? ""),
+      slug: String(brand.slug ?? ""),
+      description: (brand.description as string | null) ?? null,
+      is_featured: Boolean(brand.is_featured),
+      discount_percent: brand.discount_percent == null ? null : Number(brand.discount_percent),
+      logo_url: mediaUrl((brand.logo_path as string | null) ?? null),
+      logo_alt: `${String(brand.name ?? "")} logo`,
+      official_website_url: (brand.website_url as string | null) ?? null,
+      logo_use_status: brand.logo_path ? "approved" : "unavailable",
+      logo_background: "white",
+      display_order: Number(brand.display_order ?? 0),
+      product_count: productCounts.get(String(brand.id)) ?? 0,
+    }))
+    .filter((brand) => brand.product_count > 0);
 }
 
 export async function listCategories(): Promise<Category[]> {

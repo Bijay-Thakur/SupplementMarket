@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BrandCard } from "@/components/catalog/brand-card";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
 
 const catalogSql = readFileSync(
   path.join(process.cwd(), "../supabase/migrations/20260903030807_product_catalog.sql"),
@@ -54,7 +55,7 @@ describe("committed supabase catalog migrations", () => {
 describe("brand card", () => {
   it("falls back to the brand name when no logo exists", () => {
     const html = renderToStaticMarkup(
-      BrandCard({
+      createElement(BrandCard, {
         brand: {
           id: 1,
           name: "MaryRuth's",
@@ -72,7 +73,7 @@ describe("brand card", () => {
 
   it("renders object-contain logo with accessible alt", () => {
     const html = renderToStaticMarkup(
-      BrandCard({
+      createElement(BrandCard, {
         brand: {
           id: 1,
           name: "Twinlab",
@@ -81,12 +82,14 @@ describe("brand card", () => {
           is_featured: true,
           logo_url: "/brand/twinlab.svg",
           logo_alt: "Twinlab",
-          logo_use_status: "permission_pending",
+          logo_use_status: "approved",
+          product_count: 12,
         },
       }),
     );
     expect(html).toContain("object-contain");
     expect(html).toContain('alt="Twinlab"');
-    expect(html).toContain("permission pending");
+    expect(html).toContain("12 products");
+    expect(html).toContain('href="/brands/twinlab"');
   });
 });

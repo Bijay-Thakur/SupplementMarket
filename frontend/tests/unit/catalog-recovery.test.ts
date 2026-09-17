@@ -10,6 +10,7 @@ const catalogBrowser = read("src/components/catalog/catalog-browser.tsx");
 const liveCatalog = read("src/lib/data/supabase-catalog.ts");
 const cleanupMigration = read("../supabase/migrations/20260915120000_remove_naturesplus_products.sql");
 const catalogApi = read("src/lib/api/catalog.ts");
+const brandLogoMigration = read("../supabase/migrations/20260916213000_customer_brand_logos.sql");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -56,6 +57,14 @@ describe("catalog recovery and deletion", () => {
     expect(liveCatalog).toMatch(/fetchAllSupabaseRows/);
     expect(liveCatalog).toMatch(/\.range\(from, to\)/);
     expect(liveCatalog).toMatch(/page\.length < SUPABASE_PAGE_SIZE/);
+  });
+
+  it("publishes only sellable brands with reviewed logo assets", () => {
+    expect(liveCatalog).toMatch(/logo_path,website_url/);
+    expect(liveCatalog).toMatch(/productCounts/);
+    expect(liveCatalog).toMatch(/brand\.product_count > 0/);
+    expect(brandLogoMigration).toMatch(/\/brand-logos\/garden-of-life\.png/);
+    expect(brandLogoMigration).toMatch(/where brand\.slug = source\.slug/);
   });
 
   it("removes only the normalized Nature's Plus brand identity", () => {
