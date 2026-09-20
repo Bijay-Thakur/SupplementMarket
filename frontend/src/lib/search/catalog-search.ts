@@ -89,6 +89,11 @@ const CONCEPT_SYNONYMS: Record<string, string[]> = {
   multivitamin: ["multivitamin", "multi vitamin", "multi", "multivitamins"],
   probiotic: ["probiotic", "probiotics", "flora", "acidophilus"],
   magnesium: ["magnesium"],
+  cbd: ["cbd", "thc", "hemp extract", "cannabidiol"],
+  stress: ["stress", "anxiety", "calm", "relaxation"],
+  bloodpressure: ["blood pressure", "cardiovascular support", "circulation support"],
+  kidshealth: ["kids", "kid", "kid's", "children", "child", "pediatric"],
+  libido: ["libido", "sexual wellness", "sexual health", "intimacy"],
   zinc: ["zinc"],
   maryruth: ["maryruth", "mary ruth", "maryruths", "mary ruths"],
   pain: ["joint support", "occasional discomfort", "healthy inflammatory response"],
@@ -106,6 +111,8 @@ const PHRASE_KEYS: { re: RegExp; key: string }[] = [
   { re: /\bcholecalciferol\b/g, key: "d3" },
   { re: /\bd\s*3\b/g, key: "d3" },
   { re: /\bfish\s*oil\b/g, key: "omega3" },
+  { re: /\bblood\s*pressure\b/g, key: "bloodpressure" },
+  { re: /\bkids?['’]?\s*health\b/g, key: "kidshealth" },
   { re: /\bomega\s*3\b/g, key: "omega3" },
   { re: /\bmary\s*ruths?\b/g, key: "maryruth" },
   { re: /\bmulti\s*vitamins?\b/g, key: "multivitamin" },
@@ -258,6 +265,14 @@ export function buildSearchFields(doc: SearchDocument): SearchFields {
 }
 
 function groupMatches(fields: SearchFields, group: ConceptGroup): { ok: boolean; where: string | null; typo: boolean } {
+  // This shortcut must match whole concepts: substring/stem matching would
+  // incorrectly treat "kidney" as "kid".
+  if (group.key === "kidshealth") {
+    const matched = group.terms.find((term) => fields.tokens.includes(stem(term)));
+    return matched
+      ? { ok: true, where: locate(fields, matched), typo: false }
+      : { ok: false, where: null, typo: false };
+  }
   for (const term of group.terms) {
     if (!term) continue;
     if (fields.sku === compactCode(term) || fields.upc === compactCode(term)) {

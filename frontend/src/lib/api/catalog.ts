@@ -152,6 +152,19 @@ export function adminDeleteProduct(id: number | string, confirmation: string) {
   });
 }
 
+export function adminDeleteProducts(productIds: string[], confirmation: string) {
+  return apiFetch<{
+    ok: boolean;
+    deleted_products: number;
+    product_ids: string[];
+    deleted_image_objects?: number;
+    warning?: string;
+  }>("/api/v1/admin/products/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ product_ids: productIds, confirmation }),
+  });
+}
+
 export function adminUploadProductImage(id: number | string, file: File, altText = "") {
   const body = new FormData();
   body.append("file", file);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -86,7 +87,7 @@ export default function AdminBrandsPage() {
       )}
 
       <div className="mt-8 overflow-hidden rounded-[--radius-lg] border bg-white">
-        <div className="grid grid-cols-[1fr_9rem_7rem] gap-3 border-b bg-[color:var(--brand-cream)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[color:var(--muted)]">
+        <div className="hidden gap-3 border-b bg-[color:var(--brand-cream)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[color:var(--muted)] sm:grid sm:grid-cols-[minmax(0,1fr)_9rem_7rem]">
           <span>Brand</span>
           <span>Discount</span>
           <span className="sr-only">Action</span>
@@ -123,7 +124,7 @@ function BrandDiscountRow({ brand }: { brand: Brand }) {
 
   return (
     <form
-      className="grid grid-cols-[1fr_9rem_7rem] items-center gap-3 border-b px-4 py-3 last:border-b-0"
+      className="grid min-w-0 grid-cols-1 items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]"
       onSubmit={(event) => {
         event.preventDefault();
         const parsed = Number(value);
@@ -136,7 +137,12 @@ function BrandDiscountRow({ brand }: { brand: Brand }) {
       }}
     >
       <div>
-        <p className="font-medium">{brand.name}</p>
+        <Link
+          href={`/admin/products?brand=${encodeURIComponent(brand.slug)}`}
+          className="font-medium text-[color:var(--brand-green-strong)] hover:underline"
+        >
+          {brand.name} <span className="text-xs">View products →</span>
+        </Link>
         {(validation || save.error) && (
           <p className="mt-1 text-xs text-[color:var(--danger)]">{validation || save.error?.message}</p>
         )}

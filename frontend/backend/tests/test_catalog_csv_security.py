@@ -340,6 +340,27 @@ def test_optional_image_failure_does_not_raise(monkeypatch) -> None:
     assert any("without an image" in w for w in row["warnings"])
 
 
+def test_catalog_select_all_reads_beyond_postgrest_first_page(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    calls: list[dict[str, str]] = []
+
+    class DummySb:
+        @staticmethod
+        def select(_table, params):
+            calls.append(params)
+            offset = int(params["offset"])
+            return [{"id": offset + index} for index in range(1000 if offset == 0 else 2)]
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    rows = ci._select_all("products", "id")
+
+    assert len(rows) == 1002
+    assert [call["offset"] for call in calls] == ["0", "1000"]
+    assert all(call["limit"] == "1000" for call in calls)
+    assert all(call["order"] == "id.asc" for call in calls)
+
+
 def test_preview_blocks_duplicate_until_admin_approves_update(monkeypatch) -> None:
     from app.core.config import settings
     from app.services import catalog_import as ci
@@ -484,6 +505,8 @@ def test_import_delete_only_targets_inserted_product_images(monkeypatch) -> None
                     {"detected_action": "update", "committed_product_id": "00000000-0000-4000-a000-000000000020"},
                 ]
             if table == "product_images":
+                if params.get("storage_path"):
+                    return []
                 assert "00000000-0000-4000-a000-000000000010" in params["product_id"]
                 assert "00000000-0000-4000-a000-000000000020" not in params["product_id"]
                 return [{"storage_path": "biosil/product/image.png"}]
@@ -570,7 +593,9 @@ def test_product_delete_requires_confirmation_and_cleans_owned_images(monkeypatc
 
     class DummySb:
         @staticmethod
-        def select(table, _params):
+        def select(table, params):
+            if params.get("storage_path"):
+                return []
             if table == "products":
                 return [{"id": product_id, "name": "Zinc"}]
             if table == "product_images":
@@ -602,3 +627,40 @@ def test_product_delete_requires_confirmation_and_cleans_owned_images(monkeypatc
         )
     ]
     assert deleted_objects == [("product-images", "now/zinc/front.png")]
+
+
+def test_bulk_product_delete_calls_one_atomic_rpc_and_keeps_shared_media(monkeypatch) -> None:
+    from app.services import catalog_import as ci
+
+    ids = ["00000000-0000-4000-a000-000000000010", "00000000-0000-4000-a000-000000000011"]
+    calls: list[tuple[str, dict]] = []
+    removed: list[str] = []
+
+    class DummySb:
+        @staticmethod
+        def select(table, params):
+            if params.get("product_id"):
+                return [{"storage_path": "shared/photo.png"}, {"storage_path": "old/front.png"}]
+            if params.get("storage_path") == "eq.shared/photo.png":
+                return [{"id": "another-product-image"}]
+            return []
+
+        @staticmethod
+        def rpc(function, payload):
+            calls.append((function, payload))
+            return {"ok": True, "deleted_products": 2, "product_ids": ids}
+
+        @staticmethod
+        def delete_object(_bucket, path):
+            removed.append(path)
+
+    monkeypatch.setattr(ci, "sb", DummySb())
+    with pytest.raises(ValidationError, match="CONFIRM"):
+        ci.delete_products(ids, "confirm")
+    with pytest.raises(ValidationError, match="Duplicate"):
+        ci.delete_products([ids[0], ids[0]], "CONFIRM")
+
+    result = ci.delete_products(ids, "CONFIRM")
+    assert result["deleted_products"] == 2
+    assert calls == [("delete_catalog_products", {"p_product_ids": ids, "p_confirmation": "CONFIRM"})]
+    assert removed == ["old/front.png"]

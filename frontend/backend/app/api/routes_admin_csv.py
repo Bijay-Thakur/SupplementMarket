@@ -603,6 +603,17 @@ def delete_product_permanently(product_id: str, body: dict[str, Any], request: R
     )
 
 
+@router.post("/products/bulk-delete")
+def delete_products_permanently(body: dict[str, Any], request: Request):
+    origin = request.headers.get("origin")
+    if origin and origin != settings.frontend_origin:
+        raise ForbiddenError("Invalid request origin.")
+    return catalog_import.delete_products(
+        body.get("product_ids"),
+        str(body.get("confirmation") or ""),
+    )
+
+
 @router.delete("/products/{product_id}")
 def archive_product(product_id: str):
     sb.update("products", {"id": f"eq.{product_id}"}, {"status": "archived"})

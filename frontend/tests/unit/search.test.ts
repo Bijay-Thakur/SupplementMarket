@@ -61,6 +61,21 @@ describe("search concept groups", () => {
     expect(groups.length).toBeGreaterThanOrEqual(2);
     expect(groups.map((g) => g.key)).toEqual(expect.arrayContaining(["magnesium", "300"]));
   });
+
+  it("joins the CBD/THC and stress/anxiety shortcut concepts", () => {
+    expect(tokenizeQuery("cbd")[0].terms).toContain("thc");
+    expect(tokenizeQuery("stress")[0].terms).toContain("anxiety");
+    expect(tokenizeQuery("blood pressure")).toHaveLength(1);
+  });
+
+  it("keeps kids' health distinct from kidney and links sexual wellness to libido", () => {
+    expect(tokenizeQuery("kids health")).toHaveLength(1);
+    expect(tokenizeQuery("kids health")[0].terms).toContain("children");
+    expect(tokenizeQuery("libido")[0].terms).toContain("sexual wellness");
+    const results = names("kids health");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((name) => /kidney/i.test(name))).toBe(false);
+  });
 });
 
 describe("golden catalog queries", () => {

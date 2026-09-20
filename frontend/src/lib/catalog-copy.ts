@@ -2,6 +2,7 @@ export const AVAILABILITY_LABELS: Record<string, string> = {
   in_stock: "In stock",
   low_stock: "Low stock",
   out_of_stock: "Out of stock",
+  special_order: "Special order",
   coming_soon: "Coming soon",
 };
 

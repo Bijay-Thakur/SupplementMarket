@@ -107,8 +107,47 @@ def _cleanup_storage_paths(storage_paths: list[str]) -> int:
         return sum(1 for removed in executor.map(remove, storage_paths) if not removed)
 
 
+def _cleanup_unreferenced_storage_paths(storage_paths: list[str]) -> tuple[int, int]:
+    """Remove local objects only when no remaining product references them."""
+    removable: list[str] = []
+    uncertain = 0
+    for path in storage_paths:
+        try:
+            still_used = sb.select(
+                "product_images",
+                {"select": "id", "storage_path": f"eq.{path}", "limit": "1"},
+            )
+        except Exception:
+            uncertain += 1
+            continue
+        if not still_used:
+            removable.append(path)
+    failed = _cleanup_storage_paths(removable)
+    return len(removable) - failed, failed + uncertain
+
+
 def _public_batch(batch: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in batch.items() if k != "content"}
+
+
+def _select_all(table: str, columns: str, *, page_size: int = 1000) -> list[dict[str, Any]]:
+    """Read every catalog row instead of accepting PostgREST's page cap."""
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        page = sb.select(
+            table,
+            {
+                "select": columns,
+                "order": "id.asc",
+                "limit": str(page_size),
+                "offset": str(offset),
+            },
+        )
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        offset += page_size
 
 
 def _catalog_indexes() -> dict[str, dict[Any, dict[str, Any]]]:
@@ -122,25 +161,23 @@ def _catalog_indexes() -> dict[str, dict[Any, dict[str, Any]]]:
         return indexes
     with ThreadPoolExecutor(max_workers=3) as executor:
         variants_future = executor.submit(
-            sb.select,
+            _select_all,
             "product_variants",
-            {
-                "select": (
-                    "id,product_id,sku,upc,supplier_sku,source_name,regular_price_cents,"
-                    "sale_price_cents,form,unit_count,size_value,size_unit,strength_value,"
-                    "strength_unit,cost_price_cents,label,availability"
-                )
-            },
+            (
+                "id,product_id,sku,upc,supplier_sku,source_name,regular_price_cents,"
+                "sale_price_cents,form,unit_count,size_value,size_unit,strength_value,"
+                "strength_unit,cost_price_cents,label,availability"
+            ),
         )
         products_future = executor.submit(
-            sb.select,
+            _select_all,
             "products",
-            {"select": "id,name,slug,brand_id,category_id,short_description,description,status"},
+            "id,name,slug,brand_id,category_id,short_description,description,status",
         )
         brands_future = executor.submit(
-            sb.select,
+            _select_all,
             "brands",
-            {"select": "id,name,slug,discount_percent"},
+            "id,name,slug,discount_percent",
         )
         variants = variants_future.result()
         products_rows = {row["id"]: row for row in products_future.result()}
@@ -926,7 +963,16 @@ def commit_csv(batch_id: str, *, included_row_numbers: list[int] | None, force_r
                 committed_product_id=committed_product_id,
                 committed_variant_id=committed_variant_id,
             )
+            warning_count = len(row.get("warnings") or [])
             _try_attach_image(row, product["id"])
+            if len(row.get("warnings") or []) > warning_count:
+                _record_import_row(
+                    batch_row["id"],
+                    row,
+                    detected,
+                    committed_product_id=committed_product_id,
+                    committed_variant_id=committed_variant_id,
+                )
     except Exception:
         sb.update(
             "catalog_import_batches",
@@ -1043,14 +1089,14 @@ def delete_batch(batch_id: str, confirmation: str) -> dict[str, Any]:
 
     # The database transaction is authoritative. Stale objects are reported
     # without making the already-completed deletion appear to fail.
-    failed_storage_cleanup = _cleanup_storage_paths(storage_paths)
+    deleted_image_objects, failed_storage_cleanup = _cleanup_unreferenced_storage_paths(storage_paths)
 
     payload = result if isinstance(result, dict) else {"ok": True, "batch_id": normalized_batch_id}
-    payload["deleted_image_objects"] = len(storage_paths) - failed_storage_cleanup
+    payload["deleted_image_objects"] = deleted_image_objects
     if failed_storage_cleanup:
         payload["warning"] = (
-            f"The import was deleted, but {failed_storage_cleanup} unreferenced image "
-            "object(s) could not be removed from storage."
+            f"The import was deleted, but {failed_storage_cleanup} image "
+            "object(s) could not be safely removed from storage."
         )
     return payload
 
@@ -1094,19 +1140,52 @@ def delete_product(product_id: str, confirmation: str) -> dict[str, Any]:
         },
     )
 
-    # The database deletion is authoritative; unreferenced storage objects are
-    # reported without misrepresenting the database result.
-    failed_storage_cleanup = _cleanup_storage_paths(storage_paths)
+    # The database deletion is authoritative; shared files remain in storage.
+    deleted_image_objects, failed_storage_cleanup = _cleanup_unreferenced_storage_paths(storage_paths)
 
     payload = result if isinstance(result, dict) else {
         "ok": True,
         "product_id": normalized_product_id,
         "product_name": products[0].get("name"),
     }
-    payload["deleted_image_objects"] = len(storage_paths) - failed_storage_cleanup
+    payload["deleted_image_objects"] = deleted_image_objects
     if failed_storage_cleanup:
         payload["warning"] = (
-            f"The product was deleted, but {failed_storage_cleanup} unreferenced image "
-            "object(s) could not be removed from storage."
+            f"The product was deleted, but {failed_storage_cleanup} image "
+            "object(s) could not be safely removed from storage."
+        )
+    return payload
+
+
+def delete_products(product_ids: list[str], confirmation: str) -> dict[str, Any]:
+    """Atomically delete a bounded selection and clean up unreferenced media."""
+    if confirmation != "CONFIRM":
+        raise ValidationError("Type CONFIRM to delete these products.")
+    if not isinstance(product_ids, list) or not 1 <= len(product_ids) <= 100:
+        raise ValidationError("Select between 1 and 100 products.")
+    try:
+        normalized_ids = [str(uuid.UUID(value)) for value in product_ids]
+    except (TypeError, ValueError, AttributeError):
+        raise ValidationError("Invalid product identifier in selection.") from None
+    if len(set(normalized_ids)) != len(normalized_ids):
+        raise ValidationError("Duplicate products in selection.")
+
+    storage_paths = _storage_paths_for_products(normalized_ids)
+    result = sb.rpc(
+        "delete_catalog_products",
+        {"p_product_ids": normalized_ids, "p_confirmation": confirmation},
+    )
+    payload = result if isinstance(result, dict) else {
+        "ok": True,
+        "deleted_products": len(normalized_ids),
+        "product_ids": normalized_ids,
+    }
+
+    # A cleanup lookup failure must never undo or misreport database deletion.
+    deleted_image_objects, failed_cleanup = _cleanup_unreferenced_storage_paths(storage_paths)
+    payload["deleted_image_objects"] = deleted_image_objects
+    if failed_cleanup:
+        payload["warning"] = (
+            "Products were deleted, but some image objects could not be safely cleaned up."
         )
     return payload

@@ -44,4 +44,21 @@ test.describe("catalog search navigation", () => {
 
     await expect(page).toHaveURL(/\/categories\/protein$/);
   });
+
+  test("new popular shortcuts open their live product results", async ({ page }) => {
+    const nav = page.getByRole("navigation", { name: "Popular product categories" });
+    for (const [label, query] of [
+      ["Kids' Health", "kids health"],
+      ["Sexual Wellness", "libido"],
+      ["Pets", "pet"],
+      ["Protein", "protein"],
+    ]) {
+      const link = nav.getByRole("link", { name: label });
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`\\?q=${encodeURIComponent(query)}$`));
+      await expect(link).toHaveAttribute("aria-current", "page");
+      await expect(page.locator("main article").first()).toBeVisible();
+    }
+    await expect(page).toHaveURL(/\?q=protein$/);
+  });
 });

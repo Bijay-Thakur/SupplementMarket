@@ -33,7 +33,7 @@ export function AnnouncementBar({
       aria-label="Store announcement"
       className="bg-[color:var(--brand-green)] text-white"
     >
-      <div className="mx-auto flex max-w-7xl items-start justify-center gap-3 px-4 py-2 text-center text-sm sm:items-center">
+      <div className="mx-auto flex w-full items-start justify-center gap-3 px-4 py-2 text-center text-sm sm:items-center sm:px-5 lg:px-6 2xl:px-8">
         <p className="min-w-0 flex-1 text-pretty font-medium leading-snug">{message}</p>
         <button
           type="button"

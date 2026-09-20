@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminArchiveProduct,
+  adminDeleteProducts,
   adminDuplicateProduct,
+  adminListBrands,
   adminProducts,
   adminUpdateProduct,
 } from "@/lib/api/catalog";
@@ -15,12 +18,24 @@ import { ProductThumb } from "@/components/catalog/product-thumb";
 import { AvailabilityBadge } from "@/components/catalog/availability-badge";
 
 export default function AdminProductsPage() {
+  return <Suspense fallback={<p className="p-6">Loading products…</p>}><ProductsContent /></Suspense>;
+}
+
+function ProductsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const brand = searchParams.get("brand") ?? "";
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
   const [availability, setAvailability] = useState("");
+  const [selection, setSelection] = useState<{ brand: string; products: Record<string, string> }>({ brand: "", products: {} });
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState("");
   const qc = useQueryClient();
+  const brands = useQuery({ queryKey: ["admin-brands"], queryFn: adminListBrands });
   const list = useQuery({
     queryKey: ["admin-products", q, page, brand, category, availability],
     queryFn: () =>
@@ -42,6 +57,51 @@ export default function AdminProductsPage() {
   });
 
   const rows = list.data?.items ?? [];
+  const selected = selection.brand === brand ? selection.products : {};
+  const selectedIds = Object.keys(selected);
+  const visibleIds = rows.map((row) => String(row.id));
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => id in selected);
+
+  function changeBrand(slug: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (slug) next.set("brand", slug);
+    else next.delete("brand");
+    setSelection({ brand: slug, products: {} });
+    setPage(1);
+    router.push(`/admin/products${next.size ? `?${next}` : ""}`);
+  }
+
+  function toggleSelected(id: string, name: string, checked: boolean) {
+    setSelection((current) => {
+      const products = { ...(current.brand === brand ? current.products : {}) };
+      if (checked) products[id] = name;
+      else delete products[id];
+      return { brand, products };
+    });
+  }
+
+  async function deleteSelected() {
+    if (deleteConfirmation !== "CONFIRM" || selectedIds.length === 0) return;
+    setDeleteError("");
+    try {
+      const result = await adminDeleteProducts(selectedIds, deleteConfirmation);
+      setDeleteNotice(`${result.deleted_products} product${result.deleted_products === 1 ? "" : "s"} deleted.${result.warning ? ` ${result.warning}` : ""}`);
+      setSelection({ brand, products: {} });
+      setDeleteOpen(false);
+      setDeleteConfirmation("");
+      setPage(1);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin-products"] }),
+        qc.invalidateQueries({ queryKey: ["admin-brands"] }),
+        qc.invalidateQueries({ queryKey: ["products"] }),
+        qc.invalidateQueries({ queryKey: ["filters"] }),
+      ]);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Products could not be deleted.");
+    }
+  }
+
+  const deleting = useMutation({ mutationFn: deleteSelected });
 
   return (
     <div>
@@ -49,7 +109,7 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold">Products</h1>
           <p className="mt-1 text-sm text-[color:var(--muted)]">
-            Archive instead of deleting. Prices are integer cents.
+            Select products to permanently delete their catalog records. Historical order details are retained.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -74,15 +134,15 @@ export default function AdminProductsPage() {
         }}
       />
       <div className="mt-3 flex flex-wrap gap-2">
-        <input
+        <select
           className="h-10 rounded-[--radius] border border-[color:var(--border)] px-3 text-sm"
-          placeholder="Brand slug"
+          aria-label="Filter products by brand"
           value={brand}
-          onChange={(e) => {
-            setBrand(e.target.value);
-            setPage(1);
-          }}
-        />
+          onChange={(e) => changeBrand(e.target.value)}
+        >
+          <option value="">All brands</option>
+          {(brands.data ?? []).map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
+        </select>
         <input
           className="h-10 rounded-[--radius] border border-[color:var(--border)] px-3 text-sm"
           placeholder="Category slug"
@@ -101,18 +161,49 @@ export default function AdminProductsPage() {
           }}
         >
           <option value="">All availability</option>
-          {["in_stock", "low_stock", "out_of_stock", "coming_soon"].map((a) => (
+          {["in_stock", "low_stock", "out_of_stock", "special_order", "coming_soon"].map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
           ))}
         </select>
       </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <span className="text-sm text-[color:var(--muted)]">{selectedIds.length} selected across pages</span>
+        <button
+          type="button"
+          className="rounded-[--radius] border border-[color:var(--danger)] px-3 py-2 text-sm font-semibold text-[color:var(--danger)] disabled:opacity-50"
+          disabled={selectedIds.length === 0 || selectedIds.length > 100}
+          onClick={() => { setDeleteOpen(true); setDeleteConfirmation(""); setDeleteError(""); }}
+        >
+          Delete selected
+        </button>
+        {selectedIds.length > 100 && <span className="text-sm text-[color:var(--danger)]">Select at most 100 products per deletion.</span>}
+        {deleteNotice && <span role="status" className="text-sm text-[color:var(--brand-green-strong)]">{deleteNotice}</span>}
+      </div>
       {list.isError && <p className="mt-4 text-[color:var(--danger)]">Failed to load products.</p>}
       <div className="mt-4 overflow-x-auto rounded-[--radius] border border-[color:var(--border)] bg-surface">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-[color:var(--brand-cream)] text-xs uppercase">
             <tr>
+              <th className="p-3">
+                <input
+                  type="checkbox"
+                  aria-label="Select all products on this page"
+                  checked={allVisibleSelected}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setSelection((current) => {
+                      const products = { ...(current.brand === brand ? current.products : {}) };
+                      for (const row of rows) {
+                        if (checked) products[String(row.id)] = row.name;
+                        else delete products[String(row.id)];
+                      }
+                      return { brand, products };
+                    });
+                  }}
+                />
+              </th>
               <th className="p-3">Product</th>
               <th className="p-3">Regular</th>
               <th className="p-3">Sale</th>
@@ -124,6 +215,14 @@ export default function AdminProductsPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-[color:var(--border)]">
+                <td className="p-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${r.name}`}
+                    checked={String(r.id) in selected}
+                    onChange={(event) => toggleSelected(String(r.id), r.name, event.target.checked)}
+                  />
+                </td>
                 <td className="p-3">
                   <div className="flex items-center gap-3">
                     <ProductThumb src={r.thumbnail_url} alt="" className="h-12 w-12 rounded object-cover" />
@@ -182,7 +281,7 @@ export default function AdminProductsPage() {
                       patch.mutate({ id: r.id, body: { availability: e.target.value } })
                     }
                   >
-                    {["in_stock", "low_stock", "out_of_stock", "coming_soon"].map((a) => (
+                    {["in_stock", "low_stock", "out_of_stock", "special_order", "coming_soon"].map((a) => (
                       <option key={a} value={a}>
                         {a}
                       </option>
@@ -256,6 +355,27 @@ export default function AdminProductsPage() {
       )}
       {patch.isError && (
         <p className="mt-3 text-sm text-[color:var(--danger)]">{String(patch.error.message)}</p>
+      )}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 px-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title" className="w-full max-w-lg rounded-[--radius-lg] bg-surface p-6 shadow-2xl">
+            <h2 id="bulk-delete-title" className="font-display text-2xl font-semibold">Permanently delete {selectedIds.length} products?</h2>
+            <p className="mt-3 text-sm text-[color:var(--muted)]">This removes their catalog records and images. Existing orders keep their saved product details. This cannot be undone.</p>
+            <ul className="mt-3 max-h-32 overflow-y-auto text-sm" aria-label="Selected products">
+              {selectedIds.map((id) => <li key={id}>{selected[id]}</li>)}
+            </ul>
+            <label className="mt-4 block text-sm font-medium">Type CONFIRM to continue
+              <input autoFocus autoComplete="off" className="mt-1 h-11 w-full rounded-[--radius] border px-3" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} />
+            </label>
+            {deleteError && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{deleteError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" className="rounded-[--radius] border px-4 py-2" disabled={deleting.isPending} onClick={() => setDeleteOpen(false)}>Cancel</button>
+              <button type="button" className="rounded-[--radius] bg-[color:var(--danger)] px-4 py-2 font-semibold text-white disabled:opacity-50" disabled={deleting.isPending || deleteConfirmation !== "CONFIRM"} onClick={() => deleting.mutate()}>
+                {deleting.isPending ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

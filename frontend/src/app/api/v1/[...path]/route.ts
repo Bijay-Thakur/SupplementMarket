@@ -139,6 +139,10 @@ function requireSameOrigin(req: NextRequest) {
 function revalidateStorefront() {
   revalidatePath("/");
   revalidatePath("/products");
+  revalidatePath("/products/[slug]", "page");
+  revalidatePath("/brands");
+  revalidatePath("/brands/[slug]", "page");
+  revalidatePath("/categories/[slug]", "page");
   revalidatePath("/sales");
   revalidatePath("/admin/products");
 }
@@ -333,6 +337,24 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return json(address, 201);
     }
     if (path[0] === "admin") await requireAdmin(req);
+    if (key === "admin/products/bulk-delete") {
+      if (getDataProvider() !== "supabase") {
+        throw new ApiHttpError(400, "Permanent product deletion requires the live catalog.", "not_supported");
+      }
+      const body = await readJson(req);
+      if (body.confirmation !== "CONFIRM" || !Array.isArray(body.product_ids) ||
+          body.product_ids.length < 1 || body.product_ids.length > 100 ||
+          !body.product_ids.every((id) => typeof id === "string")) {
+        throw new ApiHttpError(422, "Select 1-100 products and type CONFIRM.", "validation_error");
+      }
+      const deleted = await fastapiAdmin("/products/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      revalidateStorefront();
+      return json(deleted);
+    }
     if (getDataProvider() === "supabase" && key === "admin/products") {
       const created = await fastapiAdmin("/products", {
         method: "POST",

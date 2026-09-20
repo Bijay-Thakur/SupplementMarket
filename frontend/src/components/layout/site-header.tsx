@@ -9,6 +9,7 @@ import { CartLink } from "./cart-link";
 import { AuthNav } from "./auth-nav";
 import { getAuthenticatedUser } from "@/lib/auth/server";
 import { SwitchExperienceButton } from "@/components/entry/entry-experience";
+import { PopularShortcuts } from "./popular-shortcuts";
 
 /** Responsive storefront header. Server component; interactive bits are islands. */
 export async function SiteHeader() {
@@ -57,6 +58,9 @@ export async function SiteHeader() {
           <HeaderSearch />
         </Suspense>
       </div>
+      <Suspense fallback={null}>
+        <PopularShortcuts />
+      </Suspense>
     </header>
   );
 }

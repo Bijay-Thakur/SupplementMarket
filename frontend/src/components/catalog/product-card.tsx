@@ -21,10 +21,10 @@ export function ProductCard({ product }: { product: ProductListItem }) {
         <ProductThumb
           src={product.primary_image_url}
           alt={product.name}
-          className="aspect-square w-full object-cover"
+          className="h-40 w-full object-contain sm:aspect-square sm:h-auto"
         />
       </Link>
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3 sm:p-4">
         <p className="break-words text-xs font-medium uppercase tracking-wide text-[color:var(--brand-green-strong)]">
           {product.brand_name}
         </p>

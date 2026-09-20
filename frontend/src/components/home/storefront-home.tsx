@@ -52,7 +52,7 @@ export function StorefrontHome() {
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-md">
+          <div className="relative mx-auto w-full max-w-md lg:max-w-xl 2xl:max-w-2xl">
             <div className="absolute inset-0 -z-10 rounded-full bg-[color:var(--brand-gold)]/15 blur-2xl" />
             <Image
               src="/brand/bronxville-natural-market-logo.png"

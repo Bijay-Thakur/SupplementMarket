@@ -219,7 +219,7 @@ export function CatalogBrowser({
             ))}
           </FilterGroup>
           <FilterGroup label="Availability">
-            {["in_stock", "low_stock", "out_of_stock", "coming_soon"].map((a) => (
+            {["in_stock", "low_stock", "out_of_stock", "special_order", "coming_soon"].map((a) => (
               <FilterLink
                 key={a}
                 active={availability === a}
@@ -276,7 +276,7 @@ export function CatalogBrowser({
             </div>
           )}
 
-          {query.isLoading && <ProductGridSkeleton />}
+          {query.isLoading && <ProductGridSkeleton wide />}
           {query.isError && (
             <p className="rounded-[--radius] border border-[color:var(--danger)]/30 bg-red-50 px-4 py-6 text-sm">
               Could not load the catalog. Please refresh and try again.
@@ -295,7 +295,7 @@ export function CatalogBrowser({
             </div>
           ) : null}
           {query.data && !(query.data.items.length === 0 && locked?.category && brand) ? (
-            <ProductGrid products={query.data.items} />
+            <ProductGrid products={query.data.items} wide />
           ) : null}
 
           {query.data && query.data.pages > 1 && (

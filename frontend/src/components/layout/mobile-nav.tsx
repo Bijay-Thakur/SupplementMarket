@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { PRIMARY_NAV } from "@/lib/config/navigation";
@@ -20,15 +21,19 @@ export function MobileNav({
 
   useEffect(() => {
     if (!open) return;
+    const previousOverflow = document.body.style.overflow;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     panelRef.current?.querySelector<HTMLElement>("a,button")?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
@@ -46,9 +51,9 @@ export function MobileNav({
         <Menu className="h-6 w-6" aria-hidden />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          className="fixed inset-0 z-50 xl:hidden"
+          className="fixed inset-0 z-[100] xl:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Site menu"
@@ -60,7 +65,7 @@ export function MobileNav({
           />
           <div
             ref={panelRef}
-            className="absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-surface p-6 shadow-xl"
+            className="absolute inset-y-0 right-0 flex w-80 max-w-[85vw] flex-col overflow-y-auto overscroll-contain bg-surface p-6 shadow-xl"
           >
             <div className="flex items-center justify-between">
               <span className="font-display text-lg font-semibold">Menu</span>
@@ -114,7 +119,8 @@ export function MobileNav({
               )}
             </nav>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

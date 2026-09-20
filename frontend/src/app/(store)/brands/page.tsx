@@ -17,7 +17,7 @@ export default function BrandsPage() {
       <SampleCatalogNotice />
       {q.isLoading && <p className="mt-8">Loading…</p>}
       {q.data && (
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="brand-directory-grid mt-8 grid min-w-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {q.data.map((b) => (
             <li key={b.id}>
               <BrandCard brand={b} />

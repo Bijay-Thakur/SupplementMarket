@@ -75,7 +75,7 @@ export function HomeMerchandising() {
         </Section>
       )}
       <Section title="Shop by brand" href="/brands">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 2xl:grid-cols-8">
           {(brands.data ?? []).slice(0, 8).map((b) => (
             <BrandCard key={b.id} brand={b} className="h-36" />
           ))}

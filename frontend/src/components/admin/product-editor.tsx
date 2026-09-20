@@ -392,7 +392,7 @@ export function ProductEditor({ productId }: Props) {
 
       <Section title="5. Availability">
         <select className="fld max-w-xs" value={form.availability} onChange={(e) => set("availability", e.target.value)}>
-          {["in_stock", "low_stock", "out_of_stock", "coming_soon"].map((a) => (
+          {["in_stock", "low_stock", "out_of_stock", "special_order", "coming_soon"].map((a) => (
             <option key={a}>{a}</option>
           ))}
         </select>
