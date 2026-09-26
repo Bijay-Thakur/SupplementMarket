@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
 import sys
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -14,9 +16,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from PIL import Image, ImageDraw, ImageOps
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_AUDIT_ROOT = REPO_ROOT / "outputs" / "product-image-audit"
 
 
 def load_local_env() -> dict[str, str]:
@@ -155,6 +159,167 @@ def select_all(table: str, columns: str, **filters: str) -> list[dict[str, Any]]
         offset += 1000
 
 
+def public_image_url(storage_path: str) -> str:
+    if storage_path.startswith(("http://", "https://")):
+        return storage_path
+    return (
+        f"{SUPABASE_URL}/storage/v1/object/public/product-images/"
+        f"{storage_path.lstrip('/')}"
+    )
+
+
+def download_for_audit(url: str) -> bytes | None:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 Chrome/140 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Referer": "https://bronxvillenatural.com/",
+    }
+    with httpx.Client(follow_redirects=True, headers=headers, timeout=30) as client:
+        for attempt in range(5):
+            try:
+                response = client.get(url)
+            except httpx.HTTPError:
+                response = None
+            if response is not None and response.status_code == 200:
+                content_type = response.headers.get("content-type", "")
+                if content_type.startswith("image/"):
+                    return response.content
+            if response is None or response.status_code not in {429, 502, 503, 504}:
+                return None
+            time.sleep(1.0 + attempt * 1.5)
+    return None
+
+
+def text_lines(draw: ImageDraw.ImageDraw, value: str, width: int) -> list[str]:
+    words = value.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if draw.textlength(candidate) <= width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def create_contact_sheets(
+    brand_slug: str,
+    images: list[dict[str, Any]],
+    product_by_id: dict[str, dict[str, Any]],
+    upc_by_product: dict[str, str],
+    output_root: Path,
+) -> dict[str, Any]:
+    brand_root = output_root / brand_slug
+    cache_root = brand_root / "images"
+    sheets_root = brand_root / "sheets"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    sheets_root.mkdir(parents=True, exist_ok=True)
+
+    manifest: list[dict[str, Any]] = []
+    for index, row in enumerate(images, start=1):
+        product_id = str(row["product_id"])
+        product = product_by_id.get(product_id, {})
+        upc = upc_by_product.get(product_id, "")
+        local_source: Path | None = None
+        if (
+            brand_slug == "solgar"
+            and upc
+            and "products/image-remediation/" not in str(row.get("storage_path") or "")
+        ):
+            matches = list((REPO_ROOT / "outputs" / "npg-sept26-import" / "images").glob(f"{upc}.*"))
+            if matches:
+                local_source = matches[0]
+
+        content = local_source.read_bytes() if local_source else download_for_audit(
+            public_image_url(str(row.get("storage_path") or ""))
+        )
+        item: dict[str, Any] = {
+            "index": index,
+            "image_id": row.get("id"),
+            "product_id": product_id,
+            "product": product.get("name"),
+            "slug": product.get("slug"),
+            "upc": upc,
+            "storage_path": row.get("storage_path"),
+            "downloaded": bool(content),
+        }
+        if content:
+            try:
+                with Image.open(io.BytesIO(content)) as opened:
+                    item["width"], item["height"] = opened.size
+                    item["format"] = opened.format
+                    item["exif_orientation"] = opened.getexif().get(274)
+                    normalized = ImageOps.exif_transpose(opened).convert("RGB")
+                    local_path = cache_root / f"{index:04d}-{product_id}.jpg"
+                    normalized.save(local_path, "JPEG", quality=92, optimize=True)
+                    item["local_path"] = str(local_path)
+            except Exception as exc:
+                item["error"] = str(exc)
+        manifest.append(item)
+        if index % 25 == 0 or index == len(images):
+            print(f"Audit download {brand_slug}: {index}/{len(images)}", flush=True)
+
+    columns = 5
+    rows_per_sheet = 5
+    cell_width = 230
+    cell_height = 245
+    image_height = 185
+    sheet_paths: list[str] = []
+    available = [item for item in manifest if item.get("local_path")]
+    for sheet_index, start in enumerate(range(0, len(available), columns * rows_per_sheet), start=1):
+        page = available[start : start + columns * rows_per_sheet]
+        sheet = Image.new("RGB", (columns * cell_width, rows_per_sheet * cell_height), "white")
+        draw = ImageDraw.Draw(sheet)
+        for offset, item in enumerate(page):
+            column = offset % columns
+            row_number = offset // columns
+            left = column * cell_width
+            top = row_number * cell_height
+            with Image.open(item["local_path"]) as image:
+                thumbnail = ImageOps.contain(image.convert("RGB"), (cell_width - 16, image_height - 8))
+            paste_x = left + (cell_width - thumbnail.width) // 2
+            paste_y = top + (image_height - thumbnail.height) // 2
+            sheet.paste(thumbnail, (paste_x, paste_y))
+            draw.rectangle((left, top, left + cell_width - 1, top + cell_height - 1), outline="#d6d6d6")
+            label = f"{item['index']:03d} {item.get('product') or ''}"
+            lines = text_lines(draw, label, cell_width - 12)[:2]
+            for line_number, line in enumerate(lines):
+                draw.text((left + 6, top + image_height + 2 + line_number * 13), line, fill="black")
+            meta = f"{item.get('width', '?')}x{item.get('height', '?')}  UPC {item.get('upc') or '-'}"
+            draw.text((left + 6, top + cell_height - 15), meta, fill="#555555")
+        sheet_path = sheets_root / f"sheet-{sheet_index:02d}.jpg"
+        sheet.save(sheet_path, "JPEG", quality=90, optimize=True)
+        sheet_paths.append(str(sheet_path))
+
+    manifest_path = brand_root / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {
+        "downloaded": sum(1 for item in manifest if item.get("local_path")),
+        "failed": sum(1 for item in manifest if not item.get("local_path")),
+        "low_resolution": [
+            {
+                "index": item["index"],
+                "product": item.get("product"),
+                "upc": item.get("upc"),
+                "width": item.get("width"),
+                "height": item.get("height"),
+            }
+            for item in manifest
+            if item.get("width") and min(int(item["width"]), int(item["height"])) < 500
+        ],
+        "manifest": str(manifest_path),
+        "sheets": sheet_paths,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("brand_slug")
@@ -167,6 +332,8 @@ def main() -> None:
     parser.add_argument("--commit-iherb", action="store_true")
     parser.add_argument("--shopify-base")
     parser.add_argument("--commit-shopify", action="store_true")
+    parser.add_argument("--contact-sheets", action="store_true")
+    parser.add_argument("--audit-output", type=Path, default=DEFAULT_AUDIT_ROOT)
     args = parser.parse_args()
 
     brands = select(
@@ -215,6 +382,32 @@ def main() -> None:
             for row in images[:10]
         ],
     }
+
+    if args.contact_sheets:
+        variants: list[dict[str, Any]] = []
+        for start in range(0, len(product_ids), 40):
+            chunk = product_ids[start : start + 40]
+            variants.extend(
+                select(
+                    "product_variants",
+                    {
+                        "select": "product_id,upc,is_default",
+                        "product_id": f"in.({','.join(chunk)})",
+                    },
+                )
+            )
+        upc_by_product: dict[str, str] = {}
+        for variant in sorted(variants, key=lambda value: not bool(value.get("is_default"))):
+            product_id = str(variant.get("product_id") or "")
+            if product_id and variant.get("upc") and product_id not in upc_by_product:
+                upc_by_product[product_id] = str(variant["upc"])
+        report["contact_sheets"] = create_contact_sheets(
+            args.brand_slug,
+            images,
+            product_by_id,
+            upc_by_product,
+            args.audit_output,
+        )
 
     if args.shopify_base:
         matches = shopify_matches(args.shopify_base, images)

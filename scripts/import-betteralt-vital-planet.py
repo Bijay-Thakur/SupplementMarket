@@ -156,9 +156,8 @@ def enrich_vital_planet(
                     "name": row.get("product_full_name", ""),
                 }
             )
-        # Neither CSV reports stock on hand; do not allow checkout by implying
-        # inventory that has not been verified by the store.
-        row["availability"] = row.get("availability") or "special_order"
+        # The store confirmed these catalog items are carried and purchasable.
+        row["availability"] = row.get("availability") or "in_stock"
         enriched.append(row)
     return enriched, {
         "source_rows": len(rows),
@@ -292,7 +291,7 @@ def enrich_betteralt(
         if not row.get("image_url") and match["image_url"]:
             row["image_url"] = match["image_url"]
             images_added += 1
-        row["availability"] = row.get("availability") or "special_order"
+        row["availability"] = row.get("availability") or "in_stock"
         enriched.append(row)
     return enriched, {
         "source_rows": len(rows),

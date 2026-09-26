@@ -7,7 +7,11 @@ export const AVAILABILITY_LABELS: Record<string, string> = {
 };
 
 export function canAddToCart(availability: string): boolean {
-  return availability === "in_stock" || availability === "low_stock";
+  return (
+    availability === "in_stock" ||
+    availability === "low_stock" ||
+    availability === "special_order"
+  );
 }
 
 export const FDA_DISCLAIMER =
