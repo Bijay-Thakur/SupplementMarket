@@ -11,6 +11,8 @@ const liveCatalog = read("src/lib/data/supabase-catalog.ts");
 const cleanupMigration = read("../supabase/migrations/20260915120000_remove_naturesplus_products.sql");
 const catalogApi = read("src/lib/api/catalog.ts");
 const brandLogoMigration = read("../supabase/migrations/20260916213000_customer_brand_logos.sql");
+const bulkDeleteMigration = read("../supabase/migrations/20260919143000_bulk_catalog_product_delete.sql");
+const productsPage = read("src/app/(admin)/admin/products/page.tsx");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -30,6 +32,19 @@ describe("catalog recovery and deletion", () => {
 
   it("keeps historical order snapshots when a product is deleted", () => {
     expect(migration).toMatch(/order_items_product_id_fkey[\s\S]*on delete set null/i);
+  });
+
+  it("wires selected products to one restricted atomic bulk delete", () => {
+    expect(productsPage).toMatch(/adminDeleteProducts\(selectedIds, deleteConfirmation\)/);
+    expect(catalogApi).toMatch(/\/api\/v1\/admin\/products\/bulk-delete/);
+    expect(apiRoute).toMatch(/key === "admin\/products\/bulk-delete"/);
+    expect(apiRoute).toMatch(/fastapiAdmin\("\/products\/bulk-delete"/);
+    expect(bulkDeleteMigration).toMatch(/delete_catalog_products/i);
+    expect(bulkDeleteMigration).toMatch(/delete from public\.products where id = any\(p_product_ids\)/i);
+    expect(bulkDeleteMigration).toMatch(/p_confirmation is distinct from 'CONFIRM'/i);
+    expect(bulkDeleteMigration).toMatch(/set search_path = ''/i);
+    expect(bulkDeleteMigration).toMatch(/revoke all[\s\S]*from public, anon, authenticated/i);
+    expect(bulkDeleteMigration).toMatch(/grant execute[\s\S]*to service_role/i);
   });
 
   it("uses the canonical brand page from a locked category", () => {

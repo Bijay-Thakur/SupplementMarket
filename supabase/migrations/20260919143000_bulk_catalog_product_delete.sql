@@ -7,7 +7,7 @@ create or replace function public.delete_catalog_products(
 returns jsonb
 language plpgsql
 security definer
-set search_path = pg_catalog, public
+set search_path = ''
 as $$
 declare
   v_found_ids uuid[];
