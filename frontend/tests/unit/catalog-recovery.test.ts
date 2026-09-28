@@ -14,6 +14,9 @@ const brandLogoMigration = read("../supabase/migrations/20260916213000_customer_
 const bulkDeleteMigration = read("../supabase/migrations/20260919143000_bulk_catalog_product_delete.sql");
 const productsPage = read("src/app/(admin)/admin/products/page.tsx");
 const adminTypes = read("src/lib/api/types.ts");
+const csvImportHistoryRoute = read("src/app/api/admin/catalog-imports/route.ts");
+const supabaseImports = read("src/lib/data/supabase-imports.ts");
+const supabaseProductAdmin = read("src/lib/data/supabase-product-admin.ts");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -41,7 +44,11 @@ describe("catalog recovery and deletion", () => {
     expect(productsPage).toMatch(/deleting\.isPending \? "Deleting[^"]*" : "Confirm"/);
     expect(catalogApi).toMatch(/\/api\/v1\/admin\/products\/bulk-delete/);
     expect(apiRoute).toMatch(/key === "admin\/products\/bulk-delete"/);
-    expect(apiRoute).toMatch(/fastapiAdmin\("\/products\/bulk-delete"/);
+    expect(apiRoute).toMatch(/deleteCatalogProducts\(body\.product_ids, body\.confirmation\)/);
+    expect(apiRoute).not.toMatch(/fastapiAdmin\("\/products\/bulk-delete"/);
+    expect(supabaseProductAdmin).toMatch(/\.rpc\("delete_catalog_products"/);
+    expect(supabaseProductAdmin).toMatch(/\.from\("product_images"\)[\s\S]*\.in\("product_id", uniqueIds\)/);
+    expect(supabaseProductAdmin).toMatch(/\.storage\.from\(STORAGE_BUCKET\)\.remove\(paths\)/);
     expect(bulkDeleteMigration).toMatch(/delete_catalog_products/i);
     expect(bulkDeleteMigration).toMatch(/delete from public\.products where id = any\(p_product_ids\)/i);
     expect(bulkDeleteMigration).toMatch(/p_confirmation is distinct from 'CONFIRM'/i);
@@ -81,6 +88,23 @@ describe("catalog recovery and deletion", () => {
     expect(liveCatalog).toMatch(/fetchAllSupabaseRows/);
     expect(liveCatalog).toMatch(/\.range\(from, to\)/);
     expect(liveCatalog).toMatch(/page\.length < SUPABASE_PAGE_SIZE/);
+  });
+
+  it("loads read-only admin catalog screens directly from Supabase", () => {
+    expect(liveCatalog).toMatch(/export async function listAdminProducts/);
+    expect(liveCatalog).toMatch(/export async function listAdminBrands/);
+    expect(apiRoute).toMatch(/listSupabaseAdminProducts\(productQuery\(sp\)\)/);
+    expect(apiRoute).toMatch(/listSupabaseAdminBrands\(\)/);
+    expect(apiRoute).not.toMatch(/fastapiAdmin\(`?\/products\$\{/);
+    expect(apiRoute).not.toMatch(/fastapiAdmin\("\/brands"\)/);
+  });
+
+  it("loads persisted CSV import history directly from Supabase", () => {
+    expect(csvImportHistoryRoute).toMatch(/await requireAdmin\(req\)/);
+    expect(csvImportHistoryRoute).toMatch(/listCatalogImportBatches\(\)/);
+    expect(csvImportHistoryRoute).not.toMatch(/fastapiAdmin\("\/catalog-imports"\)/);
+    expect(supabaseImports).toMatch(/\.from\("catalog_import_batches"\)/);
+    expect(supabaseImports).toMatch(/\.order\("created_at", \{ ascending: false \}\)/);
   });
 
   it("publishes only sellable brands with reviewed logo assets", () => {

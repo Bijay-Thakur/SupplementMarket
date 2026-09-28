@@ -20,6 +20,16 @@ FORM_PATTERNS: list[tuple[str, str]] = [
 
 # (category, keywords, wellness tags)
 CATEGORY_RULES: list[tuple[str, list[str], list[str]]] = [
+    (
+        "Men & Women Health",
+        [
+            "women's", "womens ", "men's", "mens ", "prenatal", "postnatal",
+            "menopause", "perimenopause", "menstrual", "pms", "prostate",
+            "estrogen", "progesterone", "testosterone", "libido", "fertility",
+            "vaginal", "sexual health", "sexual wellness", "t-male", "ght male",
+        ],
+        ["mens health", "womens health"],
+    ),
     ("Multivitamins", ["multivitamin", "multi vitamin", "multi-vitamin", "women's multi", "men's multi"], ["immune support"]),
     ("Vitamin A", ["vitamin a", "beta carotene"], ["immune support"]),
     ("Vitamin D", ["vitamin d", "d3", "cholecalciferol", "k2"], ["bone health", "immune support"]),
@@ -42,8 +52,6 @@ CATEGORY_RULES: list[tuple[str, list[str], list[str]]] = [
     ("Heart Wellness", ["coq10", "coenzyme q", "sterol", "heart"], ["heart wellness"]),
     ("Brain Wellness", ["lion's mane", "ginkgo", "omega-3 dha", "focus"], ["brain wellness"]),
     ("Hair, Skin & Nails", ["hair", "skin", "nail", "biotin", "collagen"], ["hair skin nails"]),
-    ("Women's Wellness", ["women", "prenatal", "menopause"], ["womens health"]),
-    ("Men's Wellness", ["men's", "mens ", "prostate"], ["mens health"]),
     ("Children's Supplements", ["kid", "children", "child", "baby"], []),
     ("Sports Nutrition", ["protein", "creatine", "pre-workout", "whey", "athlete"], ["sports recovery"]),
     ("Natural Foods", ["organic beans", "nut butter", "snack", "chips", "salsa", "pickle", "ketchup", "mustard"], []),

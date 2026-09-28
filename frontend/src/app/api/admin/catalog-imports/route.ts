@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/server";
 import { fastapiAdmin } from "@/lib/admin/fastapi-proxy";
 import { ApiHttpError } from "@/lib/demo-store/engine";
 import { assertSameOrigin } from "@/lib/auth/origin";
+import { listCatalogImportBatches } from "@/lib/data/supabase-imports";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     await requireAdmin(req);
-    return NextResponse.json(await fastapiAdmin("/catalog-imports"));
+    return NextResponse.json({ items: await listCatalogImportBatches() });
   } catch (err) {
     return fail(err);
   }

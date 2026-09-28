@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import Link from "next/link";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GlobalActivity } from "@/components/ui/global-activity";
 
 function PendingQuery({ globalLoader }: { globalLoader?: boolean }) {
@@ -25,6 +26,8 @@ function renderPending(globalLoader?: boolean) {
 }
 
 describe("global activity overlay", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("lets pages show their own skeletons for normal queries", () => {
     renderPending();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -33,5 +36,27 @@ describe("global activity overlay", () => {
   it("still supports explicitly blocking foreground queries", () => {
     renderPending(true);
     expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("shows a delayed loader for a cold internal navigation without delaying the click", async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <GlobalActivity />
+        <Link href="/brands" onClick={(event) => event.preventDefault()}>Brands</Link>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "Brands" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(140));
+    expect(screen.getByRole("status")).toHaveTextContent("Opening page");
+
+    await act(async () => {
+      window.history.pushState({}, "", "/brands");
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

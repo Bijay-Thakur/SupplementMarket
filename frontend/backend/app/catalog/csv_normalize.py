@@ -50,9 +50,12 @@ SIZE_RE = re.compile(
 # unambiguous ingredient or wellness purpose in the product name.
 CATEGORY_OVERRIDES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
-        "Sexual Wellness",
+        "Men & Women Health",
         re.compile(
-            r"\b(?:testosterone|libido|tribulus|t[ -]?male|ght[ -]?male|"
+            r"\b(?:menstru\w*|menopause|perimenopause|postmenopause|pms|pmdd|"
+            r"prostate|estrogen|progesterone|testosterone|libido|fertility|"
+            r"prenatal|postnatal|vaginal|tribulus|t[ -]?male|ght[ -]?male|"
+            r"(?:women(?:'s|s)?|men(?:'s|s)?) (?:health|wellness|multi|multivitamin|formula)|"
             r"male enhancement|sexual (?:response|wellness|health)|erectile|"
             r"horny goat weed|yohimbe|male response|female response)\b",
             re.I,

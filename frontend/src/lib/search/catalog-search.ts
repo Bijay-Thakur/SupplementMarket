@@ -93,7 +93,7 @@ const CONCEPT_SYNONYMS: Record<string, string[]> = {
   stress: ["stress", "anxiety", "calm", "relaxation"],
   bloodpressure: ["blood pressure", "cardiovascular support", "circulation support"],
   kidshealth: ["kids", "kid", "kid's", "children", "child", "pediatric"],
-  libido: ["libido", "sexual wellness", "sexual health", "intimacy"],
+  libido: ["libido", "sexual wellness", "sexual health", "intimacy", "men women health", "men & women health"],
   zinc: ["zinc"],
   maryruth: ["maryruth", "mary ruth", "maryruths", "mary ruths"],
   pain: ["joint support", "occasional discomfort", "healthy inflammatory response"],

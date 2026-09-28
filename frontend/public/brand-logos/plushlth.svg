@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" role="img" aria-labelledby="title desc">
+  <title id="title">PlusHLTH</title>
+  <desc id="desc">PlusHLTH, Happy Living Through Health</desc>
+  <rect width="720" height="220" rx="24" fill="#ffffff"/>
+  <g fill="#2f243f">
+    <path d="M66 46h28v37h37v28H94v37H66v-37H29V83h37z"/>
+    <text x="150" y="132" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" letter-spacing="-4">PlusHLTH</text>
+    <text x="153" y="174" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="600" letter-spacing="5">HAPPY LIVING THROUGH HEALTH</text>
+  </g>
+</svg>

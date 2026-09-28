@@ -68,10 +68,11 @@ describe("search concept groups", () => {
     expect(tokenizeQuery("blood pressure")).toHaveLength(1);
   });
 
-  it("keeps kids' health distinct from kidney and links sexual wellness to libido", () => {
+  it("keeps kids' health distinct from kidney and links gender health to libido", () => {
     expect(tokenizeQuery("kids health")).toHaveLength(1);
     expect(tokenizeQuery("kids health")[0].terms).toContain("children");
     expect(tokenizeQuery("libido")[0].terms).toContain("sexual wellness");
+    expect(tokenizeQuery("libido")[0].terms).toContain("men women health");
     const results = names("kids health");
     expect(results.length).toBeGreaterThan(0);
     expect(results.some((name) => /kidney/i.test(name))).toBe(false);

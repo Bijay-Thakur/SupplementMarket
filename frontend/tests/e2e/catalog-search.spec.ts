@@ -49,7 +49,6 @@ test.describe("catalog search navigation", () => {
     const nav = page.getByRole("navigation", { name: "Popular product categories" });
     for (const [label, query] of [
       ["Kids' Health", "kids health"],
-      ["Sexual Wellness", "libido"],
       ["Pets", "pet"],
       ["Protein", "protein"],
     ]) {
@@ -60,5 +59,9 @@ test.describe("catalog search navigation", () => {
       await expect(page.locator("main article").first()).toBeVisible();
     }
     await expect(page).toHaveURL(/\?q=protein$/);
+    const healthLink = nav.getByRole("link", { name: "Men & Women Health" });
+    await healthLink.click();
+    await expect(page).toHaveURL(/\/categories\/men-women-health$/);
+    await expect(healthLink).toHaveAttribute("aria-current", "page");
   });
 });

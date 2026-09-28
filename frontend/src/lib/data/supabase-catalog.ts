@@ -7,6 +7,7 @@ import { ApiHttpError } from "@/lib/demo-store/engine";
 import { discountPercent, effectivePriceCents } from "@/lib/money";
 import { documentFromProduct, searchDocuments } from "@/lib/search/catalog-search";
 import type {
+  AdminProductRow,
   Brand,
   Category,
   FilterOptions,
@@ -24,6 +25,8 @@ const ACTIVE_PRODUCTS_MEMORY_TTL_MS = 30_000;
 const CATALOG_RESULT_TTL_SECONDS = 5 * 60;
 const PRODUCT_SELECT =
   `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
+const ADMIN_PRODUCT_SELECT =
+  `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS},cost_price_cents),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
 
 let activeProductsMemoryCache: { expiresAt: number; products: ProductDetail[] } | null = null;
 let activeProductsRequest: Promise<ProductDetail[]> | null = null;
@@ -108,7 +111,13 @@ function mapProduct(row: Record<string, unknown>): ProductDetail {
     long_description: (row.description as string | null) ?? null,
     sku: String(variant.sku ?? variant.supplier_sku ?? ""),
     upc: (variant.upc as string | null) ?? null,
-    ingredient_highlights: null,
+    supplier_sku: (variant.supplier_sku as string | null) ?? null,
+    cost_price_cents: variant.cost_price_cents == null ? null : Number(variant.cost_price_cents),
+    ingredient_highlights: tags
+      .filter((tag) => tag.tag_type === "ingredient")
+      .map((tag) => tag.tag ?? "")
+      .filter(Boolean)
+      .join(", ") || null,
     usage_text: (row.suggested_use as string | null) ?? null,
     warnings: (row.warnings as string | null) ?? null,
     search_aliases: Array.isArray(row.search_aliases) ? (row.search_aliases as string[]) : [],
@@ -132,6 +141,19 @@ async function readActiveProducts(): Promise<ProductDetail[]> {
       .from("products")
       .select(PRODUCT_SELECT)
       .eq("status", "active")
+      .order("id")
+      .range(from, to),
+  );
+  return data.map((row) => mapProduct(row));
+}
+
+async function readAllProducts(): Promise<ProductDetail[]> {
+  const client = getSupabaseAdminClient();
+  if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+  const data = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
+    client
+      .from("products")
+      .select(ADMIN_PRODUCT_SELECT)
       .order("id")
       .range(from, to),
   );
@@ -217,32 +239,7 @@ function filterCatalog(
 }
 
 async function listProductsUncached(pq: ProductQuery) {
-  const items = filterCatalog(await fetchActiveProducts(), pq);
-  if (pq.q?.trim()) {
-    const rank = new Map(
-      searchDocuments(items.map((p) => documentFromProduct(p)), pq.q).map((hit, index) => [String(hit.id), index]),
-    );
-    items.sort((a, b) => (rank.get(String(a.id)) ?? 0) - (rank.get(String(b.id)) ?? 0));
-  }
-  if (!pq.q?.trim() || (pq.sort && pq.sort !== "relevance")) {
-    const byName = (a: ProductDetail, b: ProductDetail) => a.name.localeCompare(b.name);
-    if (pq.sort === "price_asc") {
-      items.sort((a, b) => a.effective_price_cents - b.effective_price_cents || byName(a, b));
-    } else if (pq.sort === "price_desc") {
-      items.sort((a, b) => b.effective_price_cents - a.effective_price_cents || byName(a, b));
-    } else if (pq.sort === "name_asc") {
-      items.sort(byName);
-    } else if (pq.sort === "newest") {
-      items.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")) || byName(a, b));
-    } else if (pq.sort === "discount") {
-      items.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0) || byName(a, b));
-    } else {
-      items.sort((a, b) => {
-        const stock = (p: ProductDetail) => (p.availability === "in_stock" ? 0 : 1);
-        return stock(a) - stock(b) || Number(b.is_bestseller) - Number(a.is_bestseller) || Number(b.is_featured) - Number(a.is_featured) || byName(a, b);
-      });
-    }
-  }
+  const items = filterAndSortProducts(await fetchActiveProducts(), pq);
   const list = items.map((p) => ({
     id: p.id,
     name: p.name,
@@ -273,6 +270,36 @@ async function listProductsUncached(pq: ProductQuery) {
   return pageOf(list, pq.page ?? 1, pq.page_size ?? 24);
 }
 
+function filterAndSortProducts(source: ProductDetail[], pq: ProductQuery) {
+  const items = filterCatalog(source, pq);
+  if (pq.q?.trim()) {
+    const rank = new Map(
+      searchDocuments(items.map((p) => documentFromProduct(p)), pq.q).map((hit, index) => [String(hit.id), index]),
+    );
+    items.sort((a, b) => (rank.get(String(a.id)) ?? 0) - (rank.get(String(b.id)) ?? 0));
+  }
+  if (!pq.q?.trim() || (pq.sort && pq.sort !== "relevance")) {
+    const byName = (a: ProductDetail, b: ProductDetail) => a.name.localeCompare(b.name);
+    if (pq.sort === "price_asc") {
+      items.sort((a, b) => a.effective_price_cents - b.effective_price_cents || byName(a, b));
+    } else if (pq.sort === "price_desc") {
+      items.sort((a, b) => b.effective_price_cents - a.effective_price_cents || byName(a, b));
+    } else if (pq.sort === "name_asc") {
+      items.sort(byName);
+    } else if (pq.sort === "newest") {
+      items.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")) || byName(a, b));
+    } else if (pq.sort === "discount") {
+      items.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0) || byName(a, b));
+    } else {
+      items.sort((a, b) => {
+        const stock = (p: ProductDetail) => (p.availability === "in_stock" ? 0 : 1);
+        return stock(a) - stock(b) || Number(b.is_bestseller) - Number(a.is_bestseller) || Number(b.is_featured) - Number(a.is_featured) || byName(a, b);
+      });
+    }
+  }
+  return items;
+}
+
 const listProductsCached = unstable_cache(
   listProductsUncached,
   ["catalog-product-page-v1"],
@@ -284,6 +311,46 @@ export async function listProducts(pq: ProductQuery, includeInactive = false) {
     throw new ApiHttpError(400, "Use the live admin product API for unpublished rows.", "config");
   }
   return listProductsCached(pq);
+}
+
+export async function listAdminProducts(pq: ProductQuery): Promise<Page<AdminProductRow>> {
+  const products = filterAndSortProducts(await readAllProducts(), pq);
+  return pageOf(
+    products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      brand_name: product.brand_name,
+      thumbnail_url: product.primary_image_url,
+      upc: product.upc,
+      regular_price_cents: product.regular_price_cents,
+      sale_price_cents: product.sale_price_cents,
+      discount_percent: product.discount_percent,
+      availability: product.availability,
+      is_featured: product.is_featured,
+      is_bestseller: product.is_bestseller,
+      is_new: product.is_new,
+      is_active: product.is_active,
+      is_archived: product.is_archived,
+      is_demo: false,
+      updated_at: product.updated_at,
+    })),
+    pq.page ?? 1,
+    pq.page_size ?? 25,
+  );
+}
+
+export async function getAdminProductById(id: string): Promise<ProductDetail> {
+  const client = getSupabaseAdminClient();
+  if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+  const { data, error } = await client
+    .from("products")
+    .select(ADMIN_PRODUCT_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+  if (!data) throw new ApiHttpError(404, "Product not found.", "not_found");
+  return mapProduct(data as Record<string, unknown>);
 }
 
 export async function getProductBySlug(slug: string) {
@@ -516,6 +583,33 @@ const listBrandsCached = unstable_cache(
 
 export async function listBrands(): Promise<Brand[]> {
   return listBrandsCached();
+}
+
+export async function listAdminBrands(): Promise<Brand[]> {
+  const client = getSupabaseAdminClient();
+  if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+  const rows = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
+    client
+      .from("brands")
+      .select("id,name,slug,description,is_featured,display_order,discount_percent,logo_path,website_url")
+      .eq("is_active", true)
+      .order("name")
+      .range(from, to),
+  );
+  return rows.map((brand) => ({
+    id: String(brand.id),
+    name: String(brand.name ?? ""),
+    slug: String(brand.slug ?? ""),
+    description: (brand.description as string | null) ?? null,
+    is_featured: Boolean(brand.is_featured),
+    discount_percent: brand.discount_percent == null ? null : Number(brand.discount_percent),
+    logo_url: mediaUrl((brand.logo_path as string | null) ?? null),
+    logo_alt: `${String(brand.name ?? "")} logo`,
+    official_website_url: (brand.website_url as string | null) ?? null,
+    logo_use_status: brand.logo_path ? "approved" : "unavailable",
+    logo_background: "white",
+    display_order: Number(brand.display_order ?? 0),
+  }));
 }
 
 async function listCategoriesUncached(): Promise<Category[]> {

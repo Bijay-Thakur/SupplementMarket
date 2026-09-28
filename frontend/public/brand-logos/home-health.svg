@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" role="img" aria-labelledby="title desc">
+  <title id="title">Home Health</title>
+  <desc id="desc">Home Health natural personal care</desc>
+  <rect width="720" height="220" rx="24" fill="#ffffff"/>
+  <g transform="translate(45 65)">
+    <path d="M5 54C34 13 69 0 108 4 80 21 58 44 44 72 26 73 13 67 5 54Z" fill="#54a89b"/>
+    <path d="M54 79c29-40 65-54 105-48-28 17-50 40-64 68-18 1-32-5-41-20Z" fill="#8eaa3a"/>
+  </g>
+  <text x="225" y="126" fill="#59686d" font-family="Arial, Helvetica, sans-serif" font-size="70" font-weight="400" letter-spacing="-3">home health</text>
+  <text x="229" y="165" fill="#54a89b" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="600" letter-spacing="4">NATURAL HEALTH BEGINS AT HOME</text>
+</svg>

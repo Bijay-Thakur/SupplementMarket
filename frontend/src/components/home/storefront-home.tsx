@@ -72,8 +72,8 @@ export function StorefrontHome() {
       <section className="relative overflow-hidden border-b border-[color:var(--border)] bg-[color:var(--brand-cream)]">
         <div aria-hidden="true" className="absolute -left-28 top-10 h-72 w-72 rounded-full bg-[color:var(--brand-gold)]/10 blur-3xl" />
         <div aria-hidden="true" className="absolute -right-28 bottom-0 h-80 w-80 rounded-full bg-[color:var(--brand-magenta)]/10 blur-3xl" />
-        <Container className="relative grid items-center gap-10 py-12 lg:grid-cols-[1.02fr_.98fr] lg:py-16">
-          <div className="max-w-2xl">
+        <Container className="relative grid items-center gap-8 py-12 lg:max-w-[106rem] lg:grid-cols-[1.02fr_.98fr] lg:gap-10 lg:py-16 xl:gap-12">
+          <div className="max-w-2xl lg:justify-self-end">
             <span className="inline-flex items-center gap-2 rounded-full border border-white bg-white/85 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[color:var(--brand-green-strong)] shadow-sm">
               <Leaf className="h-3.5 w-3.5" aria-hidden /> Local wellness, thoughtfully selected
             </span>
@@ -172,7 +172,7 @@ export function StorefrontHome() {
 
 function HeroProductShelf() {
   return (
-    <div className="relative mx-auto w-full max-w-[36rem]">
+    <div className="relative mx-auto w-full max-w-[36rem] lg:mx-0 lg:justify-self-start">
       <div className="relative min-h-[25rem] overflow-hidden rounded-[2rem] border border-white/90 bg-white/75 shadow-[0_24px_70px_rgba(24,48,27,0.13)] backdrop-blur-sm sm:min-h-[29rem]">
         <div aria-hidden="true" className="absolute inset-x-10 bottom-12 h-20 rounded-[50%] bg-[color:var(--brand-green)]/12 blur-2xl" />
         <div className="absolute left-5 top-5 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-[color:var(--brand-ink)] shadow-sm">

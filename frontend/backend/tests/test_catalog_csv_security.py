@@ -131,8 +131,8 @@ def test_high_confidence_category_errors_are_corrected_during_preview() -> None:
 
     assert [product["category"] for product in products] == [
         "Herbs",
-        "Sexual Wellness",
-        "Sexual Wellness",
+        "Men & Women Health",
+        "Men & Women Health",
         "Women's Wellness",
     ]
     assert "corrected from Fish Oils to Herbs" in products[0]["warnings"][0]

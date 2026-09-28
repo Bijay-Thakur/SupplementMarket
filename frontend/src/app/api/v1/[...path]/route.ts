@@ -40,9 +40,13 @@ import { assertSameOrigin } from "@/lib/auth/origin";
 import { catalogRepository, getDataProvider } from "@/lib/data/repository";
 import {
   dashboard as supabaseDashboard,
+  getAdminProductById as getSupabaseAdminProductById,
   invalidateCatalogMemoryCache,
+  listAdminBrands as listSupabaseAdminBrands,
+  listAdminProducts as listSupabaseAdminProducts,
 } from "@/lib/data/supabase-catalog";
 import { CATALOG_CACHE_TAG } from "@/lib/data/catalog-cache";
+import { deleteCatalogProducts } from "@/lib/data/supabase-product-admin";
 import {
   deleteAdminOrder,
   getAdminOrderFromDatabase,
@@ -226,18 +230,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       await requireAdmin(req);
     }
     if (getDataProvider() === "supabase" && key === "admin/products") {
-      const qs = req.nextUrl.searchParams.toString();
-      return json(await fastapiAdmin(`/products${qs ? `?${qs}` : ""}`));
+      return json(await listSupabaseAdminProducts(productQuery(sp)));
     }
     if (getDataProvider() === "supabase" && path[0] === "admin" && path[1] === "products" && path.length === 3) {
-      return json(await fastapiAdmin(`/products/${path[2]}`));
+      return json(await getSupabaseAdminProductById(path[2]));
     }
     if (key === "admin/dashboard") {
       if (getDataProvider() === "supabase") return json(await supabaseDashboard());
       return json(dashboard());
     }
     if (key === "admin/brands") {
-      if (getDataProvider() === "supabase") return json(await fastapiAdmin("/brands"));
+      if (getDataProvider() === "supabase") return json(await listSupabaseAdminBrands());
       return json(await Promise.resolve(repo.listBrands()));
     }
     if (key === "admin/products") return json(listProducts(productQuery(sp), true));
@@ -353,11 +356,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           !body.product_ids.every((id) => typeof id === "string")) {
         throw new ApiHttpError(422, "Select 1-100 products and type CONFIRM.", "validation_error");
       }
-      const deleted = await fastapiAdmin("/products/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const deleted = await deleteCatalogProducts(body.product_ids, body.confirmation);
       revalidateStorefront();
       return json(deleted);
     }

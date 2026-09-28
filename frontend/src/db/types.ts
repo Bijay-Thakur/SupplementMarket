@@ -820,6 +820,13 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_catalog_products: {
+        Args: {
+          p_confirmation: string
+          p_product_ids: string[]
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "customer" | "admin"

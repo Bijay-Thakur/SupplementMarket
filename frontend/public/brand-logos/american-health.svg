@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 220" role="img" aria-labelledby="title desc">
+  <title id="title">American Health</title>
+  <desc id="desc">American Health, good health made simple</desc>
+  <rect width="800" height="220" rx="24" fill="#ffffff"/>
+  <text x="40" y="122" fill="#2c2f33" font-family="Arial, Helvetica, sans-serif" font-size="55" font-weight="700" letter-spacing="1">AMERICAN</text>
+  <g transform="translate(330 42)" fill="none" stroke="#bf174b" stroke-width="9" stroke-linecap="round">
+    <circle cx="45" cy="45" r="39"/>
+    <circle cx="45" cy="23" r="5" fill="#bf174b" stroke="none"/>
+    <path d="M45 34v28M26 45h38M45 61 31 78M45 61l14 17"/>
+    <path d="M12 58h18M60 58h18M17 68h11M62 68h11" stroke-width="5"/>
+  </g>
+  <text x="440" y="122" fill="#2c2f33" font-family="Arial, Helvetica, sans-serif" font-size="55" font-weight="700" letter-spacing="1">HEALTH</text>
+  <text x="251" y="174" fill="#bf174b" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600" letter-spacing="3">GOOD HEALTH MADE SIMPLE</text>
+</svg>
