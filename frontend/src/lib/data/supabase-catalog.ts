@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { publicEnv } from "@/lib/env/public";
 import { ApiHttpError } from "@/lib/demo-store/engine";
@@ -15,9 +16,18 @@ import type {
   ProductQuery,
 } from "@/lib/api/types";
 import { PUBLIC_VARIANT_COLUMNS } from "./public-variant-columns";
+import { CATALOG_CACHE_TAG } from "./catalog-cache";
 import { orderDashboardSummary } from "./supabase-orders";
 
 const SUPABASE_PAGE_SIZE = 1000;
+const ACTIVE_PRODUCTS_MEMORY_TTL_MS = 30_000;
+const CATALOG_RESULT_TTL_SECONDS = 5 * 60;
+const PRODUCT_SELECT =
+  `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
+
+let activeProductsMemoryCache: { expiresAt: number; products: ProductDetail[] } | null = null;
+let activeProductsRequest: Promise<ProductDetail[]> | null = null;
+let activeProductsGeneration = 0;
 
 type SupabasePage<T> = {
   data: T[] | null;
@@ -114,20 +124,49 @@ function mapProduct(row: Record<string, unknown>): ProductDetail {
   return detail;
 }
 
-async function fetchActiveProducts(): Promise<ProductDetail[]> {
+async function readActiveProducts(): Promise<ProductDetail[]> {
   const client = getSupabaseAdminClient();
   if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
   const data = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
     client
       .from("products")
-      .select(
-        `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`,
-      )
+      .select(PRODUCT_SELECT)
       .eq("status", "active")
       .order("id")
       .range(from, to),
   );
   return data.map((row) => mapProduct(row));
+}
+
+async function fetchActiveProducts(): Promise<ProductDetail[]> {
+  const now = Date.now();
+  if (activeProductsMemoryCache && activeProductsMemoryCache.expiresAt > now) {
+    return activeProductsMemoryCache.products;
+  }
+  if (activeProductsRequest) return activeProductsRequest;
+
+  const generation = activeProductsGeneration;
+  const request = readActiveProducts()
+    .then((products) => {
+      if (generation === activeProductsGeneration) {
+        activeProductsMemoryCache = {
+          expiresAt: Date.now() + ACTIVE_PRODUCTS_MEMORY_TTL_MS,
+          products,
+        };
+      }
+      return products;
+    })
+    .finally(() => {
+      if (activeProductsRequest === request) activeProductsRequest = null;
+    });
+  activeProductsRequest = request;
+  return request;
+}
+
+export function invalidateCatalogMemoryCache() {
+  activeProductsGeneration += 1;
+  activeProductsMemoryCache = null;
+  activeProductsRequest = null;
 }
 
 function pageOf<T>(items: T[], page = 1, pageSize = 24): Page<T> {
@@ -177,10 +216,7 @@ function filterCatalog(
   return items;
 }
 
-export async function listProducts(pq: ProductQuery, includeInactive = false) {
-  if (includeInactive) {
-    throw new ApiHttpError(400, "Use the live admin product API for unpublished rows.", "config");
-  }
+async function listProductsUncached(pq: ProductQuery) {
   const items = filterCatalog(await fetchActiveProducts(), pq);
   if (pq.q?.trim()) {
     const rank = new Map(
@@ -237,25 +273,79 @@ export async function listProducts(pq: ProductQuery, includeInactive = false) {
   return pageOf(list, pq.page ?? 1, pq.page_size ?? 24);
 }
 
-export async function getProductBySlug(slug: string) {
-  const items = await fetchActiveProducts();
-  const found = items.find((p) => p.slug === slug);
-  if (!found) throw new ApiHttpError(404, "Product not found.", "not_found");
-  return found;
+const listProductsCached = unstable_cache(
+  listProductsUncached,
+  ["catalog-product-page-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+export async function listProducts(pq: ProductQuery, includeInactive = false) {
+  if (includeInactive) {
+    throw new ApiHttpError(400, "Use the live admin product API for unpublished rows.", "config");
+  }
+  return listProductsCached(pq);
 }
 
+export async function getProductBySlug(slug: string) {
+  return getProductBySlugCached(slug);
+}
+
+const getProductBySlugCached = unstable_cache(
+  async (slug: string) => {
+    const client = getSupabaseAdminClient();
+    if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+    const { data, error } = await client
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .eq("status", "active")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+    if (!data) throw new ApiHttpError(404, "Product not found.", "not_found");
+    return mapProduct(data as Record<string, unknown>);
+  },
+  ["catalog-product-detail-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+const relatedForCached = unstable_cache(
+  async (slug: string) => {
+    const product = await getProductBySlugCached(slug);
+    const client = getSupabaseAdminClient();
+    if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+    const relationshipFilters = [
+      product.category_id ? `category_id.eq.${product.category_id}` : null,
+      product.brand_id ? `brand_id.eq.${product.brand_id}` : null,
+    ].filter((value): value is string => Boolean(value));
+    if (!relationshipFilters.length) {
+      return { items: [], total: 0, page: 1, page_size: 8, pages: 1 };
+    }
+    const { data, error } = await client
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .eq("status", "active")
+      .neq("id", String(product.id))
+      .or(relationshipFilters.join(","))
+      .order("is_best_seller", { ascending: false })
+      .order("is_featured", { ascending: false })
+      .limit(8);
+    if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+    const related = (data ?? []).map(
+      (row) => mapProduct(row as Record<string, unknown>) as unknown as ProductListItem,
+    );
+    return { items: related, total: related.length, page: 1, page_size: 8, pages: 1 };
+  },
+  ["catalog-related-products-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
 export async function relatedFor(slug: string) {
-  const product = await getProductBySlug(slug);
-  const all = await fetchActiveProducts();
-  const related = all
-    .filter((p) => p.slug !== slug)
-    .filter((p) => p.category_slug === product.category_slug || p.brand_slug === product.brand_slug)
-    .slice(0, 8)
-    .map((p) => p as unknown as ProductListItem);
+  const result = await relatedForCached(slug);
+  const related = result.items;
   return { items: related, total: related.length, page: 1, page_size: 8, pages: 1 };
 }
 
-export async function suggestions(q: string) {
+async function suggestionsUncached(q: string) {
   const query = q.trim();
   if (query.length < 2) return { items: [] };
 
@@ -311,7 +401,17 @@ export async function suggestions(q: string) {
   };
 }
 
-export async function filters(pq: ProductQuery = {}): Promise<FilterOptions> {
+const suggestionsCached = unstable_cache(
+  suggestionsUncached,
+  ["catalog-suggestions-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+export async function suggestions(q: string) {
+  return suggestionsCached(q);
+}
+
+async function filtersUncached(pq: ProductQuery = {}): Promise<FilterOptions> {
   const items = await fetchActiveProducts();
   const brands = new Map<string, { name: string; slug: string; count: number }>();
   const categories = new Map<string, { name: string; slug: string; count: number }>();
@@ -352,7 +452,17 @@ export async function filters(pq: ProductQuery = {}): Promise<FilterOptions> {
   };
 }
 
-export async function listBrands(): Promise<Brand[]> {
+const filtersCached = unstable_cache(
+  filtersUncached,
+  ["catalog-filters-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+export async function filters(pq: ProductQuery = {}): Promise<FilterOptions> {
+  return filtersCached(pq);
+}
+
+async function listBrandsUncached(): Promise<Brand[]> {
   const client = getSupabaseAdminClient();
   if (!client) return [];
   const [brandRows, activeProductRows] = await Promise.all([
@@ -398,7 +508,17 @@ export async function listBrands(): Promise<Brand[]> {
     .filter((brand) => brand.product_count > 0);
 }
 
-export async function listCategories(): Promise<Category[]> {
+const listBrandsCached = unstable_cache(
+  listBrandsUncached,
+  ["catalog-brands-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+export async function listBrands(): Promise<Brand[]> {
+  return listBrandsCached();
+}
+
+async function listCategoriesUncached(): Promise<Category[]> {
   const client = getSupabaseAdminClient();
   if (!client) return [];
   const { data } = await client.from("categories").select("id,name,slug,parent_id,description,display_order").eq("is_active", true);
@@ -410,6 +530,16 @@ export async function listCategories(): Promise<Category[]> {
     description: (c.description as string | null) ?? null,
     display_order: Number(c.display_order ?? i),
   }));
+}
+
+const listCategoriesCached = unstable_cache(
+  listCategoriesUncached,
+  ["catalog-categories-v1"],
+  { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
+);
+
+export async function listCategories(): Promise<Category[]> {
+  return listCategoriesCached();
 }
 
 export async function getBrand(slug: string) {

@@ -187,6 +187,7 @@ function toAdminRow(p: DemoProduct): AdminProductRow {
     slug: p.slug,
     brand_name: p.brand_name,
     thumbnail_url: p.primary_image_url,
+    upc: p.upc,
     regular_price_cents: p.regular_price_cents,
     sale_price_cents: p.sale_price_cents,
     discount_percent: p.discount_percent,

@@ -11,24 +11,33 @@ import { useCart } from "@/components/cart/cart-provider";
 import type { ProductListItem } from "@/lib/api/types";
 import { cn } from "@/lib/utils/cn";
 
-export function ProductCard({ product }: { product: ProductListItem }) {
+export function ProductCard({
+  product,
+  compact = false,
+}: {
+  product: ProductListItem;
+  compact?: boolean;
+}) {
   const cart = useCart();
   const purchasable = canAddToCart(product.availability);
 
   return (
-    <article className="flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-[--radius-lg] border border-[color:var(--border)] bg-surface shadow-[var(--shadow-card)]">
+    <article className="group/card flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-[--radius-lg] border border-[color:var(--border)] bg-surface shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-[color:var(--brand-green)]/50 hover:shadow-md">
       <Link href={`/products/${product.slug}`} className="block min-w-0 max-w-full">
         <ProductThumb
           src={product.primary_image_url}
           alt={product.name}
-          className="h-40 w-full object-contain sm:aspect-square sm:h-auto"
+          className={cn(
+            "h-40 w-full object-contain p-3 transition duration-300 group-hover/card:scale-[1.025]",
+            compact && "sm:h-44",
+          )}
         />
       </Link>
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3 sm:p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
         <p className="break-words text-xs font-medium uppercase tracking-wide text-[color:var(--brand-green-strong)]">
           {product.brand_name}
         </p>
-        <Link href={`/products/${product.slug}`} className="break-words font-medium leading-snug hover:underline">
+        <Link href={`/products/${product.slug}`} className="break-words text-sm font-medium leading-snug hover:underline">
           {product.name}
         </Link>
         <p className="break-words text-xs text-[color:var(--muted)]">

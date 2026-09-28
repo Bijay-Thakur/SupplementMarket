@@ -39,6 +39,9 @@ export function ProductThumb({
       src={url}
       alt={alt}
       className={`max-w-full ${className ?? ""}`}
+      loading="lazy"
+      decoding="async"
+      style={{ background: "linear-gradient(160deg, #fff9f1 0%, #f3ead8 100%)" }}
       onError={() => setFailedUrl(url)}
     />
   );

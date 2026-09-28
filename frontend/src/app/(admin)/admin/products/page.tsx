@@ -31,7 +31,6 @@ function ProductsContent() {
   const [availability, setAvailability] = useState("");
   const [selection, setSelection] = useState<{ brand: string; products: Record<string, string> }>({ brand: "", products: {} });
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [deleteNotice, setDeleteNotice] = useState("");
   const qc = useQueryClient();
@@ -81,14 +80,13 @@ function ProductsContent() {
   }
 
   async function deleteSelected() {
-    if (deleteConfirmation !== "CONFIRM" || selectedIds.length === 0) return;
+    if (selectedIds.length === 0) return;
     setDeleteError("");
     try {
-      const result = await adminDeleteProducts(selectedIds, deleteConfirmation);
+      const result = await adminDeleteProducts(selectedIds, "CONFIRM");
       setDeleteNotice(`${result.deleted_products} product${result.deleted_products === 1 ? "" : "s"} deleted.${result.warning ? ` ${result.warning}` : ""}`);
       setSelection({ brand, products: {} });
       setDeleteOpen(false);
-      setDeleteConfirmation("");
       setPage(1);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["admin-products"] }),
@@ -174,7 +172,7 @@ function ProductsContent() {
           type="button"
           className="rounded-[--radius] border border-[color:var(--danger)] px-3 py-2 text-sm font-semibold text-[color:var(--danger)] disabled:opacity-50"
           disabled={selectedIds.length === 0 || selectedIds.length > 100}
-          onClick={() => { setDeleteOpen(true); setDeleteConfirmation(""); setDeleteError(""); }}
+          onClick={() => { setDeleteOpen(true); setDeleteError(""); }}
         >
           Delete selected
         </button>
@@ -205,6 +203,7 @@ function ProductsContent() {
                 />
               </th>
               <th className="p-3">Product</th>
+              <th className="p-3">UPC</th>
               <th className="p-3">Regular</th>
               <th className="p-3">Sale</th>
               <th className="p-3">Avail.</th>
@@ -254,6 +253,9 @@ function ProductsContent() {
                       ) : null}
                     </div>
                   </div>
+                </td>
+                <td className="p-3 font-mono text-xs tabular-nums">
+                  {r.upc || <span className="font-sans text-[color:var(--muted)]">—</span>}
                 </td>
                 <td className="p-3">
                   <InlineDollars
@@ -364,14 +366,11 @@ function ProductsContent() {
             <ul className="mt-3 max-h-32 overflow-y-auto text-sm" aria-label="Selected products">
               {selectedIds.map((id) => <li key={id}>{selected[id]}</li>)}
             </ul>
-            <label className="mt-4 block text-sm font-medium">Type CONFIRM to continue
-              <input autoFocus autoComplete="off" className="mt-1 h-11 w-full rounded-[--radius] border px-3" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} />
-            </label>
             {deleteError && <p role="alert" className="mt-3 text-sm text-[color:var(--danger)]">{deleteError}</p>}
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" className="rounded-[--radius] border px-4 py-2" disabled={deleting.isPending} onClick={() => setDeleteOpen(false)}>Cancel</button>
-              <button type="button" className="rounded-[--radius] bg-[color:var(--danger)] px-4 py-2 font-semibold text-white disabled:opacity-50" disabled={deleting.isPending || deleteConfirmation !== "CONFIRM"} onClick={() => deleting.mutate()}>
-                {deleting.isPending ? "Deleting…" : "Delete permanently"}
+              <button autoFocus type="button" className="rounded-[--radius] border px-4 py-2" disabled={deleting.isPending} onClick={() => setDeleteOpen(false)}>Cancel</button>
+              <button type="button" className="rounded-[--radius] bg-[color:var(--danger)] px-4 py-2 font-semibold text-white disabled:opacity-50" disabled={deleting.isPending} onClick={() => deleting.mutate()}>
+                {deleting.isPending ? "Deleting…" : "Confirm"}
               </button>
             </div>
           </section>

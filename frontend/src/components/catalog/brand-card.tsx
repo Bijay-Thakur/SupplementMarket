@@ -22,26 +22,25 @@ export function BrandCard({
     <Link
       href={`/brands/${brand.slug}`}
       className={cn(
-        "group flex h-44 flex-col items-center justify-center rounded-[--radius-lg] border border-[color:var(--border)] bg-[color:var(--brand-cream)] p-5 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--brand-magenta)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-magenta)] focus-visible:ring-offset-2",
+        "group flex h-40 flex-col items-center justify-center rounded-[--radius-lg] border border-[color:var(--border)] bg-white p-4 text-center shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[color:var(--brand-magenta)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-magenta)] focus-visible:ring-offset-2",
         className,
       )}
     >
       {showLogo ? (
         // Official logos are never recolored, stretched, or cropped.
-        <span className="flex h-20 w-full items-center justify-center rounded bg-white p-3">
+        <span className="flex h-20 w-full items-center justify-center rounded-lg bg-white p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={brand.logo_url ?? ""}
             alt={brand.logo_alt || brand.name}
-            className="max-h-16 max-w-full object-contain"
+            className="max-h-[4.5rem] max-w-full object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+            loading="lazy"
+            decoding="async"
             onError={() => setFailedLogo(brand.logo_url ?? "")}
           />
         </span>
       ) : (
         <span className="font-display text-lg font-semibold text-[color:var(--brand-ink)]">{brand.name}</span>
-      )}
-      {showLogo && (
-        <span className="mt-3 font-display text-sm font-semibold text-[color:var(--brand-ink)]">{brand.name}</span>
       )}
       {brand.is_featured && (
         <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--brand-magenta)]">

@@ -38,7 +38,11 @@ import type { ProductQuery } from "@/lib/api/types";
 import { getUserFromRequest, requireAdmin, requireUser } from "@/lib/auth/server";
 import { assertSameOrigin } from "@/lib/auth/origin";
 import { catalogRepository, getDataProvider } from "@/lib/data/repository";
-import { dashboard as supabaseDashboard } from "@/lib/data/supabase-catalog";
+import {
+  dashboard as supabaseDashboard,
+  invalidateCatalogMemoryCache,
+} from "@/lib/data/supabase-catalog";
+import { CATALOG_CACHE_TAG } from "@/lib/data/catalog-cache";
 import {
   deleteAdminOrder,
   getAdminOrderFromDatabase,
@@ -57,7 +61,7 @@ import {
   updateCustomerAddress,
 } from "@/lib/data/supabase-addresses";
 import { fastapiAdmin } from "@/lib/admin/fastapi-proxy";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   deleteAddress,
   listAddresses,
@@ -137,6 +141,8 @@ function requireSameOrigin(req: NextRequest) {
 }
 
 function revalidateStorefront() {
+  invalidateCatalogMemoryCache();
+  revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
   revalidatePath("/");
   revalidatePath("/products");
   revalidatePath("/products/[slug]", "page");

@@ -170,22 +170,6 @@ textarea.fld {
   padding: 0.5rem 0.75rem;
 }
 
-/* Keep cards readable while putting the full width of large displays to use.
-   These rules follow Tailwind's breakpoints so wider layouts win in the cascade. */
-@media (min-width: 1700px) {
-  .catalog-product-grid,
-  .brand-directory-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 2200px) {
-  .catalog-product-grid,
-  .brand-directory-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-}
-
 @media print {
   header,
   footer,

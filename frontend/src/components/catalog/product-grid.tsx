@@ -2,7 +2,8 @@ import { ProductCard } from "./product-card";
 import type { ProductListItem } from "@/lib/api/types";
 import { cn } from "@/lib/utils/cn";
 
-const gridClass = "grid min-w-0 grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4";
+const gridClass =
+  "grid min-w-0 grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
 
 export function ProductGrid({ products, wide = false }: { products: ProductListItem[]; wide?: boolean }) {
   if (products.length === 0) {
@@ -16,7 +17,7 @@ export function ProductGrid({ products, wide = false }: { products: ProductListI
   return (
     <div className={cn(gridClass, wide && "catalog-product-grid")}>
       {products.map((p) => (
-        <ProductCard key={p.id} product={p} />
+        <ProductCard key={p.id} product={p} compact={wide} />
       ))}
     </div>
   );
@@ -25,10 +26,10 @@ export function ProductGrid({ products, wide = false }: { products: ProductListI
 export function ProductGridSkeleton({ wide = false }: { wide?: boolean }) {
   return (
     <div className={cn(gridClass, wide && "catalog-product-grid")}>
-      {Array.from({ length: 8 }).map((_, i) => (
+      {Array.from({ length: 12 }).map((_, i) => (
         <div
           key={i}
-          className="aspect-[3/4] animate-pulse rounded-[--radius-lg] border border-[color:var(--border)] bg-white/70"
+          className="h-[23rem] animate-pulse rounded-[--radius-lg] border border-[color:var(--border)] bg-white/70"
         />
       ))}
     </div>

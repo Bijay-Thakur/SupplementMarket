@@ -29,10 +29,10 @@ export function Logo({
         src="/brand/bronxville-natural-market-mark.png"
         alt={showWordmark ? "" : "Bronxville Natural Market"}
         aria-hidden={showWordmark || undefined}
-        width={markSize}
-        height={markSize}
+        width={256}
+        height={210}
         priority
-        className="h-auto w-auto"
+        className="h-auto"
         style={{ width: markSize, height: "auto" }}
       />
       {showWordmark && (

@@ -13,6 +13,7 @@ const catalogApi = read("src/lib/api/catalog.ts");
 const brandLogoMigration = read("../supabase/migrations/20260916213000_customer_brand_logos.sql");
 const bulkDeleteMigration = read("../supabase/migrations/20260919143000_bulk_catalog_product_delete.sql");
 const productsPage = read("src/app/(admin)/admin/products/page.tsx");
+const adminTypes = read("src/lib/api/types.ts");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -35,7 +36,9 @@ describe("catalog recovery and deletion", () => {
   });
 
   it("wires selected products to one restricted atomic bulk delete", () => {
-    expect(productsPage).toMatch(/adminDeleteProducts\(selectedIds, deleteConfirmation\)/);
+    expect(productsPage).toMatch(/adminDeleteProducts\(selectedIds, "CONFIRM"\)/);
+    expect(productsPage).not.toMatch(/Type CONFIRM to continue/);
+    expect(productsPage).toMatch(/deleting\.isPending \? "Deleting[^"]*" : "Confirm"/);
     expect(catalogApi).toMatch(/\/api\/v1\/admin\/products\/bulk-delete/);
     expect(apiRoute).toMatch(/key === "admin\/products\/bulk-delete"/);
     expect(apiRoute).toMatch(/fastapiAdmin\("\/products\/bulk-delete"/);
@@ -45,6 +48,12 @@ describe("catalog recovery and deletion", () => {
     expect(bulkDeleteMigration).toMatch(/set search_path = ''/i);
     expect(bulkDeleteMigration).toMatch(/revoke all[\s\S]*from public, anon, authenticated/i);
     expect(bulkDeleteMigration).toMatch(/grant execute[\s\S]*to service_role/i);
+  });
+
+  it("shows UPC values in the admin product list", () => {
+    expect(adminTypes).toMatch(/export type AdminProductRow[\s\S]*upc: string \| null/);
+    expect(productsPage).toMatch(/<th className="p-3">UPC<\/th>/);
+    expect(productsPage).toMatch(/\{r\.upc \|\|/);
   });
 
   it("uses the canonical brand page from a locked category", () => {

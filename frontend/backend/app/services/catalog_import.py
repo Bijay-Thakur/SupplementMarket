@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.catalog.csv_images import image_url_allowed
-from app.catalog.csv_normalize import slugify, trim
+from app.catalog.csv_normalize import normalize_catalog_category, slugify, trim
 from app.catalog.csv_parse import DetectedColumn, parse_catalog_csv, parse_product_row
 from app.core.config import settings
 from app.core.errors import ConflictError, NotFoundError, ValidationError
@@ -823,7 +823,9 @@ def commit_csv(batch_id: str, *, included_row_numbers: list[int] | None, force_r
             if brand is None:
                 brand = _upsert_brand(brand_name)
                 brand_cache[brand_key] = brand
-            category = _upsert_category(row.get("category"))
+            category = _upsert_category(
+                normalize_catalog_category(row.get("name"), row.get("category"))
+            )
             source_name = brand["slug"]
             committed_product_id = None
             committed_variant_id = None

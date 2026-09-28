@@ -13,6 +13,7 @@ from typing import Any
 
 from app.catalog.csv_normalize import (
     dollars_to_cents,
+    normalize_catalog_category,
     normalize_form,
     normalize_upc,
     parse_size,
@@ -283,6 +284,13 @@ def parse_product_row(
         size_original=trim(raw["size"]) or None,
         image_url=trim(raw["image"]) or None,
     )
+    normalized_category = normalize_catalog_category(row.name, row.category)
+    if normalized_category != row.category:
+        previous = row.category or "Uncategorized"
+        row.warnings.append(
+            f"Category corrected from {previous} to {normalized_category} based on the product name."
+        )
+        row.category = normalized_category
     availability = trim(raw["availability"]).lower().replace(" ", "_").replace("-", "_")
     availability = AVAILABILITY_ALIASES.get(availability, availability)
     if availability:

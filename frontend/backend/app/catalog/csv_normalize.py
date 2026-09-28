@@ -45,11 +45,36 @@ SIZE_RE = re.compile(
     re.I,
 )
 
+# These overrides are intentionally narrow. Vendor files often use broad
+# merchandising sections (for example, "Specialties") that obscure an
+# unambiguous ingredient or wellness purpose in the product name.
+CATEGORY_OVERRIDES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "Sexual Wellness",
+        re.compile(
+            r"\b(?:testosterone|libido|tribulus|t[ -]?male|ght[ -]?male|"
+            r"male enhancement|sexual (?:response|wellness|health)|erectile|"
+            r"horny goat weed|yohimbe|male response|female response)\b",
+            re.I,
+        ),
+    ),
+    ("Herbs", re.compile(r"\bashwagandha\b", re.I)),
+)
+
 
 def trim(value: Any) -> str:
     if value is None:
         return ""
     return str(value).replace("\ufeff", "").strip()
+
+
+def normalize_catalog_category(product_name: Any, supplied_category: Any) -> str | None:
+    """Correct only high-confidence category mismatches from vendor catalogs."""
+    name = trim(product_name)
+    for category, pattern in CATEGORY_OVERRIDES:
+        if pattern.search(name):
+            return category
+    return trim(supplied_category) or None
 
 
 def dollars_to_cents(raw: Any) -> int | None:

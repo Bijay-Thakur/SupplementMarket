@@ -158,6 +158,7 @@ export type AdminProductRow = {
   slug: string;
   brand_name: string;
   thumbnail_url: string | null;
+  upc: string | null;
   regular_price_cents: number;
   sale_price_cents: number | null;
   discount_percent: number | null;

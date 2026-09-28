@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth/server";
 import { fastapiAdmin } from "@/lib/admin/fastapi-proxy";
 import { ApiHttpError } from "@/lib/demo-store/engine";
 import { assertSameOrigin } from "@/lib/auth/origin";
+import { CATALOG_CACHE_TAG } from "@/lib/data/catalog-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ productId:
     const { productId } = await ctx.params;
     const form = await req.formData();
     const result = await fastapiAdmin(`/products/${productId}/image`, { method: "POST", body: form });
+    revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/admin/products");

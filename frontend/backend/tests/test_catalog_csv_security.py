@@ -118,6 +118,26 @@ def test_direct_headers_parse_store_price_and_availability() -> None:
     assert product["availability"] == "low_stock"
 
 
+def test_high_confidence_category_errors_are_corrected_during_preview() -> None:
+    csv = (
+        "product_full_name,brand,category,msrp\n"
+        "Ashwagandha Root,Example,Fish Oils,19.99\n"
+        "Ultra GHT Male,Example,Specialties,29.99\n"
+        "T-Male Fast Acting Liquid,Example,Men's Multis,39.99\n"
+        "Women's Daily Multi,Example,Women's Wellness,24.99\n"
+    ).encode()
+
+    products = parse_catalog_csv(csv)["products"]
+
+    assert [product["category"] for product in products] == [
+        "Herbs",
+        "Sexual Wellness",
+        "Sexual Wellness",
+        "Women's Wellness",
+    ]
+    assert "corrected from Fish Oils to Herbs" in products[0]["warnings"][0]
+
+
 def test_vendor_active_availability_and_forms_are_normalized() -> None:
     csv = (
         "product_full_name,brand,upc,msrp,availability,size,form\n"
