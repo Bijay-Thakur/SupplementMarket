@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LoaderCircle } from "lucide-react";
 import {
   adminArchiveProduct,
   adminDeleteProducts,
@@ -18,7 +19,11 @@ import { ProductThumb } from "@/components/catalog/product-thumb";
 import { AvailabilityBadge } from "@/components/catalog/availability-badge";
 
 export default function AdminProductsPage() {
-  return <Suspense fallback={<p className="p-6">Loading products…</p>}><ProductsContent /></Suspense>;
+  return (
+    <Suspense fallback={<ProductsLoadingState className="min-h-80" />}>
+      <ProductsContent />
+    </Suspense>
+  );
 }
 
 function ProductsContent() {
@@ -178,6 +183,12 @@ function ProductsContent() {
         </button>
         {selectedIds.length > 100 && <span className="text-sm text-[color:var(--danger)]">Select at most 100 products per deletion.</span>}
         {deleteNotice && <span role="status" className="text-sm text-[color:var(--brand-green-strong)]">{deleteNotice}</span>}
+        {list.isFetching && !list.isLoading ? (
+          <span role="status" className="inline-flex items-center gap-2 text-sm text-[color:var(--muted)]">
+            <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--brand-magenta)]" aria-hidden="true" />
+            Updating products...
+          </span>
+        ) : null}
       </div>
       {list.isError && <p className="mt-4 text-[color:var(--danger)]">Failed to load products.</p>}
       <div className="mt-4 overflow-x-auto rounded-[--radius] border border-[color:var(--border)] bg-surface">
@@ -212,7 +223,21 @@ function ProductsContent() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {list.isLoading ? (
+              <tr className="border-t border-[color:var(--border)]">
+                <td colSpan={8} className="p-0">
+                  <ProductsLoadingState className="min-h-72" />
+                </td>
+              </tr>
+            ) : null}
+            {!list.isLoading && !list.isError && rows.length === 0 ? (
+              <tr className="border-t border-[color:var(--border)]">
+                <td colSpan={8} className="px-4 py-14 text-center text-[color:var(--muted)]">
+                  No products match these filters.
+                </td>
+              </tr>
+            ) : null}
+            {!list.isLoading && rows.map((r) => (
               <tr key={r.id} className="border-t border-[color:var(--border)]">
                 <td className="p-3">
                   <input
@@ -347,12 +372,28 @@ function ProductsContent() {
         </table>
       </div>
       {list.data && list.data.pages > 1 && (
-        <div className="mt-4 flex gap-2">
-          {Array.from({ length: list.data.pages }, (_, i) => i + 1).map((p) => (
-            <button key={p} type="button" className="h-9 min-w-9 rounded border px-2" onClick={() => setPage(p)}>
-              {p}
-            </button>
-          ))}
+        <div className="mt-4 overflow-x-auto pb-2" aria-label="Product pages">
+          <div className="flex w-max gap-2">
+            {Array.from({ length: list.data.pages }, (_, i) => i + 1).map((p) => {
+              const isCurrent = p === page;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  aria-current={isCurrent ? "page" : undefined}
+                  aria-label={isCurrent ? `Page ${p}, current page` : `Go to page ${p}`}
+                  className={`h-10 min-w-10 rounded-[--radius] border px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-magenta)] focus-visible:ring-offset-2 ${
+                    isCurrent
+                      ? "border-[color:var(--brand-green-strong)] bg-[color:var(--brand-green)] text-white shadow-sm"
+                      : "border-[color:var(--border)] bg-surface text-[color:var(--brand-ink)] hover:border-[color:var(--brand-green)] hover:bg-[color:var(--brand-cream)]"
+                  }`}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       {patch.isError && (
@@ -376,6 +417,19 @@ function ProductsContent() {
           </section>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProductsLoadingState({ className = "" }: { className?: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex items-center justify-center gap-3 text-sm font-medium text-[color:var(--muted)] ${className}`}
+    >
+      <LoaderCircle className="h-7 w-7 animate-spin text-[color:var(--brand-magenta)]" aria-hidden="true" />
+      <span>Loading products...</span>
     </div>
   );
 }

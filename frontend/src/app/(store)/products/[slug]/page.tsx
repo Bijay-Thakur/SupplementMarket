@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Barcode, LoaderCircle } from "lucide-react";
 import { getProduct } from "@/lib/api/catalog";
 import { Container } from "@/components/ui/container";
 import { AvailabilityBadge } from "@/components/catalog/availability-badge";
@@ -25,8 +26,16 @@ export default function ProductDetailPage() {
 
   if (product.isLoading) {
     return (
-      <Container className="py-16">
-        <div className="h-96 animate-pulse rounded-[--radius-lg] bg-white/70" />
+      <Container className="max-w-7xl py-10 sm:py-14">
+        <div className="grid gap-8 lg:grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)] lg:gap-14">
+          <div className="aspect-square animate-pulse rounded-[--radius-xl] border border-[color:var(--border)] bg-white/70" />
+          <div className="flex min-h-80 items-center justify-center rounded-[--radius-xl] border border-[color:var(--border)] bg-white/55">
+            <div role="status" className="flex items-center gap-3 text-sm font-medium text-[color:var(--muted)]">
+              <LoaderCircle className="h-7 w-7 animate-spin text-[color:var(--brand-magenta)]" aria-hidden="true" />
+              Loading product details...
+            </div>
+          </div>
+        </div>
       </Container>
     );
   }
@@ -43,19 +52,27 @@ export default function ProductDetailPage() {
   const purchasable = canAddToCart(p.availability);
 
   return (
-    <Container className="py-10">
-      <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
-        <ProductThumb
-          src={p.images[0]?.url ?? p.primary_image_url}
-          alt={p.images[0]?.alt_text || p.name}
-          className="aspect-square w-full rounded-[--radius-xl] object-cover"
-        />
+    <Container className="max-w-7xl py-8 sm:py-12">
+      <div className="grid gap-8 lg:grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)] lg:items-start lg:gap-14 xl:gap-16">
+        <div className="mx-auto w-full max-w-[30rem] rounded-[--radius-xl] border border-[color:var(--border)] bg-white p-5 shadow-[var(--shadow-card)] sm:p-7 lg:mx-0">
+          <ProductThumb
+            src={p.images[0]?.url ?? p.primary_image_url}
+            alt={p.images[0]?.alt_text || p.name}
+            className="aspect-square w-full rounded-[--radius-lg] object-contain"
+          />
+        </div>
 
-        <div>
+        <div className="max-w-2xl lg:pt-3">
           <p className="text-sm font-semibold uppercase tracking-wide text-[color:var(--brand-green-strong)]">
             {p.brand_name}
           </p>
-          <h1 className="mt-1 font-display text-3xl font-semibold">{p.name}</h1>
+          <h1 className="mt-2 font-display text-3xl font-semibold leading-tight sm:text-4xl">{p.name}</h1>
+
+          {p.short_description ? (
+            <p className="mt-4 max-w-xl text-base leading-7 text-[color:var(--muted)]">
+              {p.short_description}
+            </p>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap gap-2">
             <AvailabilityBadge value={p.availability} />
@@ -70,10 +87,19 @@ export default function ProductDetailPage() {
           />
 
           {p.upc ? (
-            <p className="mt-4 text-sm text-[color:var(--muted)]">
-              <span className="font-medium text-[color:var(--brand-ink)]">UPC</span>{" "}
-              <span className="font-mono">{p.upc}</span>
-            </p>
+            <div className="mt-5 inline-flex items-center gap-3 rounded-[--radius] border border-[color:var(--border)] bg-white px-4 py-3 shadow-sm">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[color:var(--brand-cream)] text-[color:var(--brand-green-strong)]">
+                <Barcode className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                  UPC
+                </span>
+                <span className="block font-mono text-sm font-medium tracking-[0.08em] text-[color:var(--brand-ink)] tabular-nums">
+                  {p.upc}
+                </span>
+              </span>
+            </div>
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-end gap-3" aria-label="Delivery order options">
@@ -110,8 +136,30 @@ export default function ProductDetailPage() {
               {purchasable ? "Add to cart" : "Currently unavailable"}
             </button>
           </div>
+
+          {p.long_description || p.ingredient_highlights || p.usage_text || p.warnings ? (
+            <div className="mt-8 border-t border-[color:var(--border)] pt-7">
+              {p.long_description ? (
+                <ProductCopy title="About this product" text={p.long_description} />
+              ) : null}
+              {p.ingredient_highlights ? (
+                <ProductCopy title="Ingredient highlights" text={p.ingredient_highlights} />
+              ) : null}
+              {p.usage_text ? <ProductCopy title="Suggested use" text={p.usage_text} /> : null}
+              {p.warnings ? <ProductCopy title="Important information" text={p.warnings} /> : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </Container>
+  );
+}
+
+function ProductCopy({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="mb-6 last:mb-0">
+      <h2 className="font-display text-xl font-semibold text-[color:var(--brand-ink)]">{title}</h2>
+      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[color:var(--muted)]">{text}</p>
+    </section>
   );
 }

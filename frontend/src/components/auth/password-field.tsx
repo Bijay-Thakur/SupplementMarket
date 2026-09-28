@@ -25,10 +25,10 @@ export function PasswordField({
   const controlled = value !== undefined && onChange;
   return (
     <div>
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="text-sm font-semibold text-[color:var(--brand-ink)]">
         {label}
       </label>
-      <div className="relative mt-1">
+      <div className="relative mt-2">
         <input
           id={id}
           name={name ?? id}
@@ -36,7 +36,7 @@ export function PasswordField({
           autoComplete={autoComplete}
           required={required}
           {...(controlled ? { value, onChange: (e) => onChange(e.target.value) } : {})}
-          className="block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3 pr-20"
+          className="block h-12 w-full rounded-[--radius] border border-[color:var(--brand-green)]/40 bg-white px-4 pr-20 shadow-[inset_0_1px_2px_rgba(24,48,27,0.05)] outline-none transition focus:border-[color:var(--brand-magenta)] focus:ring-2 focus:ring-[color:var(--brand-magenta)]/15"
         />
         <button
           type="button"
