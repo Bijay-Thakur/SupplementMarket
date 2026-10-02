@@ -35,12 +35,12 @@ export function ProductEditor({ productId }: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [productDirty, setProductDirty] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const dirty = productDirty || imageFile !== null;
   const [form, setForm] = useState({
     name: "",
     sku: "",
@@ -155,7 +155,7 @@ export function ProductEditor({ productId }: Props) {
   const catOptions = cats.data ?? [];
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
-    setDirty(true);
+    setProductDirty(true);
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -223,19 +223,29 @@ export function ProductEditor({ productId }: Props) {
       expected_updated_at: existing.data?.updated_at ?? undefined,
     };
     setPending(true);
+    let productWasUpdated = false;
     try {
       if (productId) {
-        await adminUpdateProduct(productId, body);
-        if (imageFile) await adminUploadProductImage(productId, imageFile, form.imageAlt);
-        setDirty(false);
+        if (productDirty) {
+          await adminUpdateProduct(productId, body);
+          productWasUpdated = true;
+          setProductDirty(false);
+        }
+        if (imageFile) {
+          await adminUploadProductImage(productId, imageFile, form.imageAlt);
+          setImageFile(null);
+        }
+        await existing.refetch();
         router.refresh();
       } else {
         const created = await adminCreateProduct(body);
         if (imageFile) await adminUploadProductImage(created.id, imageFile, form.imageAlt);
-        setDirty(false);
+        setProductDirty(false);
+        setImageFile(null);
         router.push(`/admin/products/${created.id}`);
       }
     } catch (err) {
+      if (productWasUpdated) await existing.refetch();
       setError(err instanceof ApiRequestError ? err.message : "Save failed.");
     } finally {
       setPending(false);
@@ -243,12 +253,13 @@ export function ProductEditor({ productId }: Props) {
   }
 
   async function onDelete() {
-    if (!productId || deleteConfirmation !== "CONFIRM") return;
+    if (!productId) return;
     setDeletePending(true);
     setDeleteError(null);
     try {
-      await adminDeleteProduct(productId, deleteConfirmation);
-      setDirty(false);
+      await adminDeleteProduct(productId, "CONFIRM");
+      setProductDirty(false);
+      setImageFile(null);
       router.replace("/admin/products");
       router.refresh();
     } catch (err) {
@@ -473,13 +484,16 @@ export function ProductEditor({ productId }: Props) {
             type="file"
             accept="image/jpeg,image/png,image/webp,image/avif"
             onChange={(e) => {
-              setDirty(true);
               setImageFile(e.target.files?.[0] ?? null);
             }}
           />
         </L>
         <L label="Alt text">
-          <input className="fld" value={form.imageAlt} onChange={(e) => set("imageAlt", e.target.value)} />
+          <input
+            className="fld"
+            value={form.imageAlt}
+            onChange={(e) => setForm((current) => ({ ...current, imageAlt: e.target.value }))}
+          />
         </L>
       </Section>
 
@@ -496,7 +510,6 @@ export function ProductEditor({ productId }: Props) {
             className="border-[color:var(--danger)] text-[color:var(--danger)] hover:bg-red-50"
             onClick={() => {
               setDeleteOpen(true);
-              setDeleteConfirmation("");
               setDeleteError(null);
             }}
           >
@@ -522,27 +535,17 @@ export function ProductEditor({ productId }: Props) {
             product name, quantity, and price. This cannot be undone.
           </p>
           <p className="mt-3 break-words text-sm"><strong>Product:</strong> {form.name}</p>
-          <label className="mt-5 block text-sm font-medium">
-            Type CONFIRM to continue
-            <input
-              autoFocus
-              value={deleteConfirmation}
-              onChange={(event) => setDeleteConfirmation(event.target.value)}
-              className="mt-1 block h-11 w-full rounded-[--radius] border border-[color:var(--border)] bg-surface px-3"
-              autoComplete="off"
-            />
-          </label>
           {deleteError ? (
             <p className="mt-3 text-sm text-[color:var(--danger)]" role="alert">{deleteError}</p>
           ) : null}
           <div className="mt-6 flex flex-wrap justify-end gap-3">
             <Button
+              autoFocus
               type="button"
               variant="outline"
               disabled={deletePending}
               onClick={() => {
                 setDeleteOpen(false);
-                setDeleteConfirmation("");
                 setDeleteError(null);
               }}
             >
@@ -550,7 +553,7 @@ export function ProductEditor({ productId }: Props) {
             </Button>
             <Button
               type="button"
-              disabled={deletePending || deleteConfirmation !== "CONFIRM"}
+              disabled={deletePending}
               onClick={onDelete}
               className="bg-[color:var(--danger)] hover:brightness-90"
             >
@@ -559,7 +562,7 @@ export function ProductEditor({ productId }: Props) {
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-r-transparent" />
                   Deleting…
                 </>
-              ) : "Delete permanently"}
+              ) : "Confirm"}
             </Button>
           </div>
         </section>

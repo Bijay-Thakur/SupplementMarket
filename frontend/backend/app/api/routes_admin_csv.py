@@ -571,7 +571,7 @@ async def upload_product_image(
     mime, ext = sniffed
     rows = sb.select(
         "products",
-        {"select": "id,slug,brands(slug)", "id": f"eq.{product_id}", "limit": "1"},
+        {"select": "id,name,slug,brands(slug)", "id": f"eq.{product_id}", "limit": "1"},
     )
     if not rows:
         raise NotFoundError("Product not found.")
@@ -579,17 +579,28 @@ async def upload_product_image(
     brand_slug = (product.get("brands") or {}).get("slug") or "brand"
     object_path = f"{slugify(brand_slug)}/{slugify(product.get('slug') or product_id)}/{uuid.uuid4()}.{ext}"
     sb.upload_object("product-images", object_path, content, mime)
-    sb.insert(
+    existing_images = sb.select(
         "product_images",
         {
-            "product_id": product_id,
-            "storage_path": object_path,
-            "alt_text": alt_text or product.get("name"),
-            "is_primary": True,
-            "display_order": 0,
+            "select": "id,is_primary,display_order",
+            "product_id": f"eq.{product_id}",
+            "order": "is_primary.desc,display_order.asc",
+            "limit": "1",
         },
     )
-    return {"ok": True, "storage_path": object_path}
+    image_payload = {
+        "storage_path": object_path,
+        "alt_text": alt_text or product.get("name"),
+        "is_primary": True,
+        "display_order": int(existing_images[0].get("display_order") or 0) if existing_images else 0,
+    }
+    if existing_images:
+        image_id = str(existing_images[0]["id"])
+        sb.update("product_images", {"id": f"eq.{image_id}"}, image_payload)
+        return {"ok": True, "storage_path": object_path, "replaced_image_id": image_id}
+
+    sb.insert("product_images", {"product_id": product_id, **image_payload})
+    return {"ok": True, "storage_path": object_path, "replaced_image_id": None}
 
 
 @router.delete("/products/{product_id}/permanent")

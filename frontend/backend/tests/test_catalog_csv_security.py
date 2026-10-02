@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
+import io
 from pathlib import Path
 
 import pytest
+from fastapi import UploadFile
+from starlette.datastructures import Headers
 
 from app.catalog.csv_images import image_url_allowed, sniff_image
 from app.catalog.csv_parse import parse_catalog_csv
@@ -54,6 +58,61 @@ def test_sniff_image_uses_file_signature() -> None:
     assert sniff_image(MINI_PNG) == ("image/png", "png")
     assert sniff_image(b"not-an-image") is None
     assert sniff_image(b"GIF89a") is None
+
+
+def test_product_image_upload_replaces_existing_primary(monkeypatch) -> None:
+    from app.api import routes_admin_csv as routes
+
+    product_id = "00000000-0000-4000-a000-000000000010"
+    updates: list[tuple[str, dict[str, str], dict[str, object]]] = []
+    uploads: list[tuple[str, str, str]] = []
+
+    class DummySb:
+        @staticmethod
+        def select(table, _params):
+            if table == "products":
+                return [{"id": product_id, "name": "Zinc", "slug": "zinc", "brands": {"slug": "now"}}]
+            if table == "product_images":
+                return [{"id": "image-1", "is_primary": True, "display_order": 0}]
+            return []
+
+        @staticmethod
+        def upload_object(bucket, object_path, _content, content_type):
+            uploads.append((bucket, object_path, content_type))
+
+        @staticmethod
+        def update(table, match, row):
+            updates.append((table, match, row))
+            return row
+
+        @staticmethod
+        def insert(*_args, **_kwargs):
+            raise AssertionError("replacement upload must not insert a duplicate image row")
+
+    monkeypatch.setattr(routes, "sb", DummySb())
+    upload = UploadFile(
+        file=io.BytesIO(MINI_PNG),
+        filename="front.png",
+        headers=Headers({"content-type": "image/png"}),
+    )
+
+    result = asyncio.run(routes.upload_product_image(product_id, upload, "New front image"))
+
+    assert result["ok"] is True
+    assert result["replaced_image_id"] == "image-1"
+    assert uploads and uploads[0][0] == "product-images"
+    assert updates == [
+        (
+            "product_images",
+            {"id": "eq.image-1"},
+            {
+                "storage_path": result["storage_path"],
+                "alt_text": "New front image",
+                "is_primary": True,
+                "display_order": 0,
+            },
+        )
+    ]
 
 
 def test_blank_fields_do_not_overwrite() -> None:

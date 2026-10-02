@@ -248,6 +248,16 @@ BRAND_SOURCES: dict[str, dict[str, Any]] = {
         "official_urls": ("https://www.pluscbdoil.com",),
         "official_domains": ("pluscbdoil.com", "cvsciences.com"),
     },
+    "new-chapter": {
+        "name": "New Chapter",
+        "official_urls": ("https://newchapter.com",),
+        "official_domains": ("newchapter.com", "5ff1b5-4.myshopify.com", "cdn.shopify.com"),
+    },
+    "nordic-naturals": {
+        "name": "Nordic Naturals",
+        "official_urls": ("https://www.nordic.com", "https://store.nordic.com"),
+        "official_domains": ("nordic.com", "nordicnaturals.com", "ctfassets.net"),
+    },
 }
 
 # Exact UPCs rejected during the generated contact-sheet review. Keeping the
@@ -348,6 +358,17 @@ VISUALLY_REJECTED_IMAGE_UPCS: dict[str, set[str]] = {
         "850043735021", "850019274592", "854521007938", "850043735434", "850043735731",
     },
     "plushlth": {"850043735373", "850043735366", "850043735809", "850043735854"},
+    "new-chapter": {
+        "727783003225", "727783003249", "727783903303", "727783903310", "727783903518",
+        "727783903778", "727783903402", "727783904379", "727783903747", "727783006455",
+        "727783903112", "727783902993", "727783904317", "727783902320", "727783004123",
+        "727783004130", "727783903693",
+    },
+    "nordic-naturals": {
+        "768990016127", "768990567834", "768990537851", "768990015342", "768990301896",
+        "768990311376", "768990016646", "768990016783", "768990027246", "768990505133",
+        "768990301674", "768990311512",
+    },
 }
 
 IMAGE_OVERRIDES: dict[str, dict[str, str]] = {
@@ -375,6 +396,62 @@ def image_key(row: dict[str, Any]) -> str:
     if sku:
         return f"sku-{slugify(sku)}"
     return f"name-{slugify(str(row.get('product_full_name') or row.get('name') or 'product'))}"
+
+
+SOURCE_CATEGORY_MAP: dict[str, dict[str, str]] = {
+    "new-chapter": {
+        "Beauty": "Hair, Skin & Nails",
+        "Efa/Dha": "Omega Oils",
+        "Force": "Herbs",
+        "Herbals": "Herbs",
+        "Immune": "Immune Support",
+        "Mushrooms": "Mushroom Supplements",
+        "Single Letter Vitamins": "Vitamins",
+    },
+    "nordic-naturals": {
+        "100% Arctic Cod Liver Oil": "Omega Oils",
+        "Children's Products": "Children's Supplements",
+        "CoQ10 Formulations": "Heart Wellness",
+        "Digestive Health": "Probiotics",
+        "High EPA+DHA Omega-3": "Omega Oils",
+        "Immune Health": "Immune Support",
+        "Nordic Beauty": "Hair, Skin & Nails",
+        "Nordic Pet": "Pet Formula",
+        "NSF Certified Sport Products": "Sports Nutrition",
+        "Omega-3": "Omega Oils",
+        "Omega-3/6/9 Blends": "Omega Oils",
+    },
+}
+
+
+def source_category(brand_slug: str, product_name: str, supplied: str) -> str:
+    """Map vendor merchandising groups to established storefront categories."""
+    mapped = SOURCE_CATEGORY_MAP.get(brand_slug, {}).get(supplied)
+    if mapped:
+        return mapped
+    if brand_slug == "new-chapter" and supplied == "Take Care":
+        return "Heart Wellness" if re.search(r"blood pressure", product_name, re.I) else "Bone & Joint"
+    if brand_slug == "nordic-naturals" and supplied == "Specialty Formulations":
+        for category, pattern in (
+            ("Mushroom Supplements", r"mushroom"),
+            ("Minerals", r"mineral|magnesium"),
+            ("Sleep", r"melatonin"),
+            ("Herbs", r"curcumin"),
+        ):
+            if re.search(pattern, product_name, re.I):
+                return category
+        return "Vitamins"
+    if brand_slug == "nordic-naturals" and supplied == "Support Formulations":
+        for category, pattern in (
+            ("Bone & Joint", r"joint"),
+            ("Heart Wellness", r"cholesterol"),
+            ("Eye Health", r"vision"),
+            ("Mood & Sleep", r"mood"),
+        ):
+            if re.search(pattern, product_name, re.I):
+                return category
+        return "Brain Health"
+    return supplied
 
 
 def read_source(path: Path, brand_filter: str | None = None) -> tuple[list[dict[str, str]], dict[str, Any]]:
@@ -431,6 +508,9 @@ def read_source(path: Path, brand_filter: str | None = None) -> tuple[list[dict[
         # the official display name created by ensure_brand_record().
         row["brand"] = str(config.get("import_name") or config["name"])
         row["availability"] = row["availability"] or "in_stock"
+        row["category"] = source_category(
+            brand_slug, row["product_full_name"], row["category"]
+        )
         if not row["category"]:
             category, inferred_form, _tags, _audience, _secondary = classify_name(
                 row["product_full_name"]

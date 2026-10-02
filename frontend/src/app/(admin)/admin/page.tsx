@@ -22,7 +22,7 @@ export default function AdminDashboardPage() {
             <Stat label="Total products" value={d.total_products ?? d.active_products} href="/admin/products" />
             <Stat label="Active products" value={d.active_products} href="/admin/products" />
             <Stat label="Draft products" value={d.draft_products} href="/admin/products" />
-            <Stat label="Brands" value={d.brand_count} href="/admin/taxonomy" />
+            <Stat label="Brands" value={d.brand_count} href="/admin/brands" />
             <Stat label="Categories" value={d.category_count} href="/admin/taxonomy" />
             <Stat label="On sale" value={d.on_sale} href="/admin/products?on_sale=1" />
             <Stat label="Missing images" value={d.missing_images} href="/admin/products" />
@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
               <Link href="/admin/products" className={buttonVariants({ variant: "outline" })}>
                 Manage Products
               </Link>
-              <Link href="/admin/taxonomy" className={buttonVariants({ variant: "outline" })}>
+              <Link href="/admin/brands" className={buttonVariants({ variant: "outline" })}>
                 Manage Brands
               </Link>
               <Link href="/admin/taxonomy" className={buttonVariants({ variant: "outline" })}>

@@ -17,6 +17,8 @@ const adminTypes = read("src/lib/api/types.ts");
 const csvImportHistoryRoute = read("src/app/api/admin/catalog-imports/route.ts");
 const supabaseImports = read("src/lib/data/supabase-imports.ts");
 const supabaseProductAdmin = read("src/lib/data/supabase-product-admin.ts");
+const liveProductAdmin = read("backend/app/api/routes_admin_csv.py");
+const adminDashboard = read("src/app/(admin)/admin/page.tsx");
 
 describe("catalog recovery and deletion", () => {
   it("recovers only stale processing imports", () => {
@@ -31,7 +33,22 @@ describe("catalog recovery and deletion", () => {
     expect(migration).toMatch(/delete_catalog_product/i);
     expect(migration).toMatch(/p_confirmation is distinct from 'CONFIRM'/i);
     expect(migration).toMatch(/to service_role/i);
-    expect(editor).toMatch(/deleteConfirmation !== "CONFIRM"/);
+    expect(editor).toMatch(/adminDeleteProduct\(productId, "CONFIRM"\)/);
+    expect(editor).not.toMatch(/Type CONFIRM to continue/);
+    expect(editor).toMatch(/deletePending \? \([\s\S]*: "Confirm"/);
+  });
+
+  it("replaces an existing primary image instead of inserting a duplicate", () => {
+    expect(editor).toMatch(/if \(productDirty\)[\s\S]*adminUpdateProduct/);
+    expect(editor).toMatch(/if \(imageFile\)[\s\S]*adminUploadProductImage/);
+    expect(liveProductAdmin).toMatch(/existing_images = sb\.select\([\s\S]*"product_images"/);
+    expect(liveProductAdmin).toMatch(/if existing_images:[\s\S]*sb\.update\("product_images"/);
+    expect(liveProductAdmin).toMatch(/sb\.insert\("product_images", \{"product_id": product_id/);
+  });
+
+  it("opens the dedicated brand manager from the dashboard", () => {
+    expect(adminDashboard).toMatch(/label="Brands"[\s\S]*href="\/admin\/brands"/);
+    expect(adminDashboard).toMatch(/href="\/admin\/brands"[\s\S]*Manage Brands/);
   });
 
   it("keeps historical order snapshots when a product is deleted", () => {
