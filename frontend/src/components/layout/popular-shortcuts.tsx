@@ -15,12 +15,8 @@ export function PopularShortcuts() {
       <div className="mx-auto w-full max-w-none overflow-x-auto px-4 py-2 sm:px-5 lg:px-6 2xl:px-8">
         <div className="flex w-max items-center gap-2 lg:w-auto lg:flex-wrap lg:justify-center">
           {POPULAR_SHORTCUTS.map((shortcut) => {
-            const href = "href" in shortcut
-              ? shortcut.href
-              : `/products?q=${encodeURIComponent(shortcut.query)}`;
-            const active = "href" in shortcut
-              ? pathname === shortcut.href
-              : activeQuery === shortcut.query;
+            const href = `/products?q=${encodeURIComponent(shortcut.query)}`;
+            const active = activeQuery === shortcut.query;
             return (
               <Link
                 key={shortcut.label}
