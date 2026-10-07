@@ -1,6 +1,8 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { permanentRedirect } from "next/navigation";
 import { CatalogBrowser } from "@/components/catalog/catalog-browser";
+import { SITE_NAME } from "@/lib/seo/site";
 
 const LEGACY_GENDER_HEALTH_SLUGS = new Set([
   "sexual-wellness",
@@ -19,6 +21,20 @@ const LEGACY_GENDER_HEALTH_SLUGS = new Set([
   "baby-me-2",
 ]);
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const name = slug.replaceAll("-", " ");
+  return {
+    title: name,
+    description: `Browse ${name} at ${SITE_NAME}.`,
+    alternates: { canonical: `/categories/${slug}` },
+  };
+}
+
 export default async function CategoryPage({
   params,
 }: {
@@ -26,7 +42,7 @@ export default async function CategoryPage({
 }) {
   const { slug } = await params;
   if (LEGACY_GENDER_HEALTH_SLUGS.has(slug)) {
-    permanentRedirect("/categories/men-women-health");
+    permanentRedirect("/products");
   }
   const title = slug === "men-women-health" ? "Men & Women Health" : slug.replaceAll("-", " ");
   return (

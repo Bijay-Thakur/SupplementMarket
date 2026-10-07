@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { PasswordField } from "@/components/auth/password-field";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -18,6 +19,7 @@ export default function ResetPasswordPage() {
   return (
     <Container className="max-w-md py-12">
       <h1 className="font-display text-3xl font-semibold">Set a new password</h1>
+      <p className="mt-3 text-sm text-[color:var(--muted)]">Use at least 12 characters, including uppercase and lowercase letters and a number.</p>
       <form
         className="mt-6 space-y-4"
         onSubmit={async (e) => {
@@ -31,9 +33,9 @@ export default function ResetPasswordPage() {
               credentials: "include",
               body: JSON.stringify({ password, confirmPassword: confirm }),
             });
-            const data = (await res.json()) as { detail?: string; redirectTo?: string };
+            const data = (await res.json()) as { detail?: string; redirectTo?: string; fields?: Record<string, string> };
             if (!res.ok) {
-              setError(data.detail || EXPIRED_LINK_MESSAGE);
+              setError(Object.values(data.fields ?? {})[0] || data.detail || EXPIRED_LINK_MESSAGE);
               return;
             }
             setSuccess(true);
@@ -67,6 +69,7 @@ export default function ResetPasswordPage() {
           {pending ? "Saving…" : "Save password"}
         </button>
       </form>
+      <Link href="/auth/forgot-password" className="mt-6 inline-block text-sm text-[color:var(--brand-magenta)] underline">Request a new reset link</Link>
     </Container>
   );
 }

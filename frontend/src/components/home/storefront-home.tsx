@@ -22,19 +22,19 @@ const WELLNESS_PATHS = [
   {
     title: "Everyday essentials",
     copy: "Foundational vitamins and minerals for your daily routine.",
-    href: "/categories/vitamins",
+    href: "/categories/multivitamins",
     accent: "from-[#eef7e8] to-[#f8fbf5]",
   },
   {
     title: "Calm, sleep & balance",
     copy: "Thoughtful support for slower evenings and steadier days.",
-    href: "/categories/stress-and-anxiety",
+    href: "/products?q=ashwagandha",
     accent: "from-[#fff0f5] to-[#fff9fb]",
   },
   {
     title: "Herbal favorites",
     copy: "Time-honored botanicals from brands you know and trust.",
-    href: "/categories/herbs",
+    href: "/categories/herbal-supplements",
     accent: "from-[#f5f0dd] to-[#fffdf7]",
   },
   {
@@ -83,12 +83,12 @@ export function StorefrontHome() {
             <p className="mt-5 max-w-xl text-base leading-relaxed text-[color:var(--muted)] sm:text-lg">
               Explore trusted vitamins, herbs and natural wellness favorites from the brands you love, backed by a neighborhood team that cares.
             </p>
-            <div className="mt-7 flex flex-wrap items-center gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
               <Link href="/products" className={buttonVariants({ size: "lg" })}>
                 Shop the catalog <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
-              <Link href="/sales" className={buttonVariants({ variant: "outline", size: "lg" })}>
-                Explore current sales
+              <Link href="/sales" className="text-sm font-semibold text-[color:var(--brand-magenta-strong)] underline-offset-4 hover:underline">
+                See what is on sale
               </Link>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-[color:var(--muted)]">
@@ -180,7 +180,14 @@ function HeroProductShelf() {
         </div>
         {HERO_PRODUCTS.map((product) => (
           <div key={product.src} className={`absolute ${product.className}`}>
-            <Image src={product.src} alt={product.alt} fill sizes="(max-width: 640px) 144px, 208px" className="object-contain drop-shadow-xl" />
+            <Image
+              src={product.src}
+              alt={product.alt}
+              fill
+              priority={product.src.includes("ashwagandha")}
+              sizes="(max-width: 640px) 144px, 208px"
+              className="object-contain drop-shadow-xl"
+            />
           </div>
         ))}
         <div className="absolute inset-x-5 bottom-5 z-20 flex items-center justify-between gap-4 rounded-2xl border border-white bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
@@ -188,7 +195,7 @@ function HeroProductShelf() {
             <span className="block font-display font-semibold">Good choices, all in one place</span>
             <span className="mt-0.5 block text-xs text-[color:var(--muted)]">Vitamins · Herbs · Probiotics · More</span>
           </span>
-          <Link href="/products" aria-label="Browse all products" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--brand-green)] text-white transition hover:bg-[color:var(--brand-green-strong)]">
+          <Link href="/products" aria-label="Browse all products" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color:var(--brand-green-strong)] text-white transition hover:brightness-110">
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>

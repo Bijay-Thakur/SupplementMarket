@@ -11,7 +11,7 @@ export const POPULAR_SHORTCUTS = [
   { label: "Stress and Anxiety", query: "stress" },
   { label: "Minerals", query: "mineral" },
   { label: "Kids' Health", query: "kids health" },
-  { label: "Men & Women Health", href: "/categories/men-women-health" },
+  { label: "Men & Women Health", query: "women" },
   { label: "Pets", query: "pet" },
   { label: "Protein", query: "protein" },
 ] as const;

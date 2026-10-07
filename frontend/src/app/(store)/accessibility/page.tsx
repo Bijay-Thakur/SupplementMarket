@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
 import { PolicyShell } from "@/components/ui/policy-shell";
+import { pageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = { title: "Accessibility" };
+export const metadata = pageMetadata(
+  "Accessibility",
+  "Accessibility commitments for the Bronxville Natural Market website.",
+  "/accessibility",
+);
 
 export default function AccessibilityPage() {
   return (

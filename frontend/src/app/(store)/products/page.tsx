@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CatalogBrowser } from "@/components/catalog/catalog-browser";
+import { pageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = { title: "Products" };
+export const metadata = pageMetadata(
+  "Products",
+  "Browse vitamins, herbs, and natural supplements. Filter by brand, category, and price.",
+  "/products",
+);
 
 export default function ProductsPage() {
   return (

@@ -31,7 +31,7 @@ export default function CartPage() {
               >
                 <ProductThumb
                   src={item.imageUrl}
-                  alt=""
+                  alt={item.name}
                   className="h-20 w-20 shrink-0 rounded object-cover"
                 />
                 <div className="min-w-0 flex-1">

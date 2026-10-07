@@ -12,7 +12,7 @@ export default async function SignInPage() {
   if (!features.customerAuth) redirect("/");
   const user = await getAuthenticatedUser();
   if (user?.role === "admin") redirect("/admin");
-  if (user) redirect("/account");
+  if (user) redirect("/products");
   return (
     <Suspense>
       <SignInForm />

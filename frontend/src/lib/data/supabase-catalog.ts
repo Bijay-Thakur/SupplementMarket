@@ -19,12 +19,16 @@ import type {
 import { PUBLIC_VARIANT_COLUMNS } from "./public-variant-columns";
 import { CATALOG_CACHE_TAG } from "./catalog-cache";
 import { orderDashboardSummary } from "./supabase-orders";
+import { canBrowseInDatabase } from "./catalog-browse-query";
 
 const SUPABASE_PAGE_SIZE = 1000;
 const ACTIVE_PRODUCTS_MEMORY_TTL_MS = 30_000;
 const CATALOG_RESULT_TTL_SECONDS = 5 * 60;
 const PRODUCT_SELECT =
   `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
+// Lists/search need descriptions, but not the full directions/warnings/gallery.
+const INDEX_SELECT =
+  `id,name,slug,status,brand_id,category_id,short_description,description,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS}),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
 const ADMIN_PRODUCT_SELECT =
   `id,name,slug,status,brand_id,category_id,short_description,description,suggested_use,warnings,search_aliases,is_featured,is_best_seller,is_new,created_at,updated_at,brands(name,slug),categories(name,slug),product_variants(${PUBLIC_VARIANT_COLUMNS},cost_price_cents),product_images(storage_path,alt_text,is_primary,display_order),product_tags(tag_type,tag)`;
 
@@ -133,18 +137,30 @@ function mapProduct(row: Record<string, unknown>): ProductDetail {
   return detail;
 }
 
-async function readActiveProducts(): Promise<ProductDetail[]> {
+const readActiveProductPage = unstable_cache(async (from: number) => {
   const client = getSupabaseAdminClient();
   if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
-  const data = await fetchAllSupabaseRows<Record<string, unknown>>((from, to) =>
-    client
+  const { data, error, count } = await client
       .from("products")
-      .select(PRODUCT_SELECT)
+      .select(INDEX_SELECT, { count: "exact" })
       .eq("status", "active")
       .order("id")
-      .range(from, to),
-  );
-  return data.map((row) => mapProduct(row));
+      .range(from, from + 249);
+  if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+  return { rows: (data ?? []) as Record<string, unknown>[], total: count ?? 0 };
+}, ["catalog-index-page-v1"], { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS });
+
+async function readActiveProducts(): Promise<ProductDetail[]> {
+  // Small cache entries are reusable across product pages AND facet queries.
+  // Bounded parallel reads avoid a serial network round-trip for every page.
+  const first = await readActiveProductPage(0);
+  const rows = [...first.rows];
+  for (let from = 250; from < first.total; from += 1000) {
+    const offsets = [from, from + 250, from + 500, from + 750].filter((n) => n < first.total);
+    const pages = await Promise.all(offsets.map(readActiveProductPage));
+    for (const page of pages) rows.push(...page.rows);
+  }
+  return rows.map(mapProduct);
 }
 
 async function readAllProducts(): Promise<ProductDetail[]> {
@@ -239,8 +255,14 @@ function filterCatalog(
 }
 
 async function listProductsUncached(pq: ProductQuery) {
+  if (canBrowseInDatabase(pq)) return browseProductPage(pq);
   const items = filterAndSortProducts(await fetchActiveProducts(), pq);
-  const list = items.map((p) => ({
+  const page = pageOf(items, pq.page ?? 1, pq.page_size ?? 24);
+  return { ...page, items: page.items.map(productListItem) };
+}
+
+function productListItem(p: ProductDetail): ProductListItem {
+  return {
     id: p.id,
     name: p.name,
     slug: p.slug,
@@ -266,8 +288,23 @@ async function listProductsUncached(pq: ProductQuery) {
     short_description: p.short_description,
     primary_image_url: p.primary_image_url,
     dietary: p.dietary,
-  }));
-  return pageOf(list, pq.page ?? 1, pq.page_size ?? 24);
+  };
+}
+
+async function browseProductPage(pq: ProductQuery): Promise<Page<ProductListItem>> {
+  const client = getSupabaseAdminClient();
+  if (!client) throw new ApiHttpError(503, "Supabase is not configured.", "config");
+  const page = Math.max(1, Math.trunc(pq.page ?? 1));
+  const size = Math.min(100, Math.max(1, Math.trunc(pq.page_size ?? 24)));
+  const { data, error } = await client.rpc("catalog_browse_page", { filters: { ...pq, page, page_size: size } });
+  if (error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+  const result = data as { ids: string[]; total: number };
+  if (!result?.ids) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+  const products = result.ids.length ? await client.from("products").select(INDEX_SELECT).eq("status", "active").in("id", result.ids) : { data: [], error: null };
+  if (products.error) throw new ApiHttpError(503, "Catalog is unavailable.", "upstream");
+  const rows = new Map((products.data ?? []).map((row) => [row.id, mapProduct(row as Record<string, unknown>)]));
+  const items = result.ids.flatMap((id) => rows.has(id) ? [productListItem(rows.get(id)!)] : []);
+  return { items, total: result.total, page, page_size: size, pages: Math.max(1, Math.ceil(result.total / size)) };
 }
 
 function filterAndSortProducts(source: ProductDetail[], pq: ProductQuery) {
@@ -302,7 +339,7 @@ function filterAndSortProducts(source: ProductDetail[], pq: ProductQuery) {
 
 const listProductsCached = unstable_cache(
   listProductsUncached,
-  ["catalog-product-page-v1"],
+  ["catalog-product-page-v2"],
   { tags: [CATALOG_CACHE_TAG], revalidate: CATALOG_RESULT_TTL_SECONDS },
 );
 

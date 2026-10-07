@@ -26,7 +26,7 @@ export default function SignInForm({ admin = false }: { admin?: boolean }) {
   const params = useSearchParams();
   const next = admin
     ? adminNextPath(params.get("next"))
-    : params.get("next") || "/account";
+    : params.get("next") || "/products";
   const resetOk = params.get("reset") === "1";
   const error = errorMessage(params.get("error"));
   const [pending, setPending] = useState(false);

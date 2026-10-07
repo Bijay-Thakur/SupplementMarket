@@ -31,6 +31,13 @@ const publicSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const id = value?.trim() || "";
+      return /^G-[A-Z0-9]+$/.test(id) ? id : undefined;
+    }),
 });
 
 const parsed = publicSchema.safeParse({
@@ -49,6 +56,7 @@ const parsed = publicSchema.safeParse({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
     process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
 });
 
 if (!parsed.success) {
@@ -115,6 +123,7 @@ export const publicEnv = {
   supabasePublishableKey: pickSupabaseBrowserKey(data),
   supabaseAnonKey: pickSupabaseBrowserKey(data),
   stripePublishableKey: data.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || undefined,
+  gaMeasurementId: data.NEXT_PUBLIC_GA_MEASUREMENT_ID,
 } as const;
 
 /** True when both public Supabase values are present (not placeholders). */

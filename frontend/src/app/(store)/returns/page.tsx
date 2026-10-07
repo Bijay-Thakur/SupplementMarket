@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
 import { PolicyShell } from "@/components/ui/policy-shell";
+import { pageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = { title: "Returns" };
+export const metadata = pageMetadata(
+  "Returns",
+  "How returns work at Bronxville Natural Market.",
+  "/returns",
+);
 
 export default function ReturnsPage() {
   return (

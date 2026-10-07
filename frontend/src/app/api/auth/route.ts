@@ -19,6 +19,7 @@ import { resolvePasswordSignIn } from "@/lib/auth/password-sign-in";
 import { AuthHttpError } from "@/lib/auth/contract";
 import type { PendingAuthCookie } from "@/lib/supabase/cookies";
 import { assertSameOrigin, requestOrigin } from "@/lib/auth/origin";
+import { honeypotTripped } from "@/lib/security/honeypot";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,15 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const { supabase, pending } = createCookieRecordingClient(req);
 
+  if (honeypotTripped(body)) {
+    if (action === "forgot-password") return reply(pending, { message: PASSWORD_RESET_GENERIC });
+    if (action === "resend-confirmation") {
+      return reply(pending, { message: "If that address still needs confirmation, another email is on the way." });
+    }
+    if (action === "sign-up") return reply(pending, { needsVerification: true, redirectTo: "/auth/check-email" });
+    return reply(pending, { error: "auth", detail: AUTH_GENERIC_ERROR }, 400);
+  }
+
   try {
     if (!supabase) {
       return reply(pending, { error: "config", detail: "Supabase is not configured." }, 503);
@@ -110,10 +120,16 @@ export async function POST(req: NextRequest) {
 
     if (action === "forgot-password") {
       const parsed = emailOnlySchema.safeParse(body);
-      if (parsed.success) {
-        await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      if (!parsed.success) return fieldError(pending, parsed.error);
+      {
+        const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
           redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent("/auth/reset-password")}`,
         });
+        if (error) {
+          // Never disclose whether the submitted email belongs to an account.
+          const limited = error.status === 429;
+          return reply(pending, { detail: limited ? EMAIL_RATE_LIMIT_MESSAGE : EMAIL_DELIVERY_UNAVAILABLE_MESSAGE }, limited ? 429 : 503);
+        }
       }
       return reply(pending, { message: PASSWORD_RESET_GENERIC });
     }
@@ -190,7 +206,7 @@ export async function POST(req: NextRequest) {
       return reply(pending, {
         ok: true,
         needsVerification: !data.session,
-        redirectTo: data.session ? "/account" : "/auth/check-email",
+        redirectTo: data.session ? "/products" : "/auth/check-email",
       });
     }
 
@@ -203,6 +219,8 @@ export async function POST(req: NextRequest) {
       }
       const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
       if (error) return reply(pending, { error: "auth", detail: mapAuthError(error.message, EXPIRED_LINK_MESSAGE) }, 400);
+      // Revoke refresh sessions, including the recovery session, after the change.
+      await supabase.auth.signOut({ scope: "global" });
       return reply(pending, { ok: true, redirectTo: "/auth/sign-in?reset=1" });
     }
 

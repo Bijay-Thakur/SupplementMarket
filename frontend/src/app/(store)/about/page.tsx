@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
 import { Container } from "@/components/ui/container";
 import { DEFAULT_STORE_CONFIG, formatAddress, formatHours } from "@/lib/config/store";
+import { pageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = { title: "About" };
+export const metadata = pageMetadata(
+  "About",
+  "Bronxville Natural Market is a neighborhood shop for vitamins and natural supplements at 86 Pondfield Rd.",
+  "/about",
+);
 
 /**
  * About page. Body content is owner-editable (managed via store settings in a

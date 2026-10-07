@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   }
 
   return redirectWithAuthCookies(
-    safeNextPath(result.redirectTo, portal === "admin" ? "/admin" : "/account"),
+    safeNextPath(result.redirectTo, portal === "admin" ? "/admin" : "/products"),
     pending,
     baseUrl,
   );

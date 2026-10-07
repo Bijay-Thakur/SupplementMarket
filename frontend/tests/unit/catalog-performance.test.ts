@@ -14,7 +14,7 @@ describe("live catalog performance", () => {
     expect(catalog).toMatch(/activeProductsRequest/);
     expect(catalog).toMatch(/ACTIVE_PRODUCTS_MEMORY_TTL_MS/);
     expect(catalog).toMatch(/unstable_cache/);
-    expect(catalog).toMatch(/catalog-product-page-v1/);
+    expect(catalog).toMatch(/catalog-product-page-v2/);
     expect(catalog).toMatch(/catalog-filters-v1/);
   });
 

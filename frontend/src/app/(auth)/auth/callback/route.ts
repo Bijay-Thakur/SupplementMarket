@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const siteUrl = requestOrigin(request);
-  const next = safeNextPath(url.searchParams.get("next"), "/account");
+  const next = safeNextPath(url.searchParams.get("next"), "/products");
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const emailType = url.searchParams.get("type");
   const errorDescription = url.searchParams.get("error_description") || url.searchParams.get("error");
 
-  const hasTokenConfirmation = Boolean(tokenHash && emailType === "email");
+  const hasTokenConfirmation = Boolean(tokenHash && (emailType === "email" || emailType === "recovery"));
   if (errorDescription || (!code && !hasTokenConfirmation)) {
     const dest = new URL("/auth/error", siteUrl);
     dest.searchParams.set("reason", errorDescription ? "expired" : "callback");
@@ -59,9 +59,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(fail);
   }
 
-  const dest = new URL(next, siteUrl);
+  const dest = new URL(emailType === "recovery" ? "/auth/reset-password" : next, siteUrl);
   const response = NextResponse.redirect(dest);
   response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
 
   return applyAuthCookies(response, pending);
 }

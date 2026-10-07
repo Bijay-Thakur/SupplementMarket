@@ -48,6 +48,12 @@ function mockSupabase(opts: {
 }
 
 describe("first-attempt administrator login", () => {
+  it("sends customers to products but preserves an explicit safe return destination", async () => {
+    const input = { supabase: mockSupabase({ role: "customer" }) as never, email: "shopper@example.com", password: "SecurePassword123", portal: "customer" as const };
+    expect(await resolvePasswordSignIn(input)).toMatchObject({ redirectTo: "/products", role: "customer" });
+    expect(await resolvePasswordSignIn({ ...input, next: "/checkout" })).toMatchObject({ redirectTo: "/checkout" });
+    expect(await resolvePasswordSignIn({ ...input, next: "https://evil.example" })).toMatchObject({ redirectTo: "/products" });
+  });
   it("authenticates, reads role on the same client, and returns /admin without a second request", async () => {
     const supabase = mockSupabase({ role: "admin" });
     const result = await resolvePasswordSignIn({

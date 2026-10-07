@@ -6,6 +6,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "Brands", href: "/brands" },
   { label: "Sales", href: "/sales" },
   { label: "New", href: "/new" },
+  { label: "Requests", href: "/requests" },
   { label: "About", href: "/about" },
 ];
 
@@ -18,6 +19,7 @@ export const FOOTER_NAV: { heading: string; items: NavItem[] }[] = [
       { label: "Brands", href: "/brands" },
       { label: "Sales", href: "/sales" },
       { label: "New Arrivals", href: "/new" },
+      { label: "Special Requests", href: "/requests" },
     ],
   },
   {

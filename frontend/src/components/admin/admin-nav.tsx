@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/admin/products/imports", label: "Import History" },
   { href: "/admin/settings", label: "Store Settings" },
   { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/requests", label: "Special Requests" },
   { href: "/admin/customers", label: "Customers" },
 ];
 

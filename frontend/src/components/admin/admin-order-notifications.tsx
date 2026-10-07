@@ -73,7 +73,7 @@ export function AdminOrderNotifications() {
 
   const items = query.data?.items ?? [];
   return (
-    <div className="relative ml-auto w-fit">
+    <div className="relative w-fit">
       <button
         type="button"
         aria-label={`Order notifications${items.length ? `, ${items.length} unread` : ""}`}

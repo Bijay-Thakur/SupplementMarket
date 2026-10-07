@@ -32,6 +32,7 @@ describe("signup validation", () => {
       email: "Ada@Example.com",
       password: "SecureSecret123",
       confirmPassword: "SecureSecret123",
+      acceptedTerms: true,
     });
     expect(fields).toEqual({});
     const withRole = signUpSchema.safeParse({
@@ -52,6 +53,7 @@ describe("signup validation", () => {
       email: "  Test.User@Example.COM ",
       password: "SecurePass123",
       confirmPassword: "SecurePass123",
+      acceptedTerms: true,
     });
     expect(parsed.email).toBe("test.user@example.com");
     expect(passwordSchema.safeParse("password").success).toBe(false);

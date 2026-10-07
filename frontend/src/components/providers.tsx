@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { GlobalActivity } from "@/components/ui/global-activity";
+import { CookieConsentBanner } from "@/components/consent/cookie-consent";
+import { SiteAnalytics } from "@/components/analytics/site-analytics";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -23,6 +25,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>
       <GlobalActivity />
       {children}
+      <CookieConsentBanner />
+      <SiteAnalytics />
     </QueryClientProvider>
   );
 }

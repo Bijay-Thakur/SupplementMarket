@@ -44,6 +44,13 @@ export const signUpSchema = z
         message: "Role cannot be chosen during signup.",
       });
     }
+    if (value.acceptedTerms !== true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["acceptedTerms"],
+        message: "Please accept the Terms and Privacy Policy.",
+      });
+    }
   })
   .transform((value) => ({
     username: value.username,

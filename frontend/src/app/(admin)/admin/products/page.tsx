@@ -249,7 +249,7 @@ function ProductsContent() {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center gap-3">
-                    <ProductThumb src={r.thumbnail_url} alt="" className="h-12 w-12 rounded object-cover" />
+                    <ProductThumb src={r.thumbnail_url} alt={r.name} className="h-12 w-12 rounded object-cover" />
                     <div>
                       <Link href={`/admin/products/${r.id}`} className="font-medium hover:underline">
                         {r.name}

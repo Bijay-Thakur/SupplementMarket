@@ -65,7 +65,7 @@ export async function resolvePasswordSignIn(input: {
   }
 
   return {
-    redirectTo: role === "admin" ? adminDestination(input.next) : safeNextPath(input.next, "/account"),
+    redirectTo: role === "admin" ? adminDestination(input.next) : safeNextPath(input.next, "/products"),
     userId,
     role,
   };

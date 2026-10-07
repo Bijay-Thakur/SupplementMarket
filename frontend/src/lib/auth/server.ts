@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { redirect } from "next/navigation";
 import { NextRequest } from "next/server";
@@ -65,7 +66,9 @@ function toAuthUser(
   };
 }
 
-export async function getAuthenticatedUser(): Promise<AuthUser | null> {
+// Request-scoped only: the layout, header, and account menu share verification.
+// Never put authentication data in the cross-user catalog cache.
+export const getAuthenticatedUser = cache(async (): Promise<AuthUser | null> => {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return null;
   const userId = await validatedUserId(supabase);
@@ -80,7 +83,7 @@ export async function getAuthenticatedUser(): Promise<AuthUser | null> {
   ]);
 
   return toAuthUser(user, profile, roleInfo.role, !profile, roleInfo.missing);
-}
+});
 
 export async function getVerifiedAccessToken(): Promise<string | null> {
   const supabase = await getSupabaseServerClient();

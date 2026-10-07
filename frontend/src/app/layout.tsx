@@ -4,6 +4,7 @@ import "./globals.css";
 import { publicEnv } from "@/lib/env/public";
 import { DEFAULT_STORE_CONFIG } from "@/lib/config/store";
 import { AppProviders } from "@/components/providers";
+import { DEFAULT_DESCRIPTION, SOCIAL_IMAGE_ALT, SOCIAL_IMAGE_PATH } from "@/lib/seo/site";
 
 const inter = Inter({
   variable: "--font-body",
@@ -33,14 +34,27 @@ export const metadata: Metadata = {
     default: `${DEFAULT_STORE_CONFIG.name} — Local Health Food & Supplements`,
     template: `%s · ${DEFAULT_STORE_CONFIG.name}`,
   },
-  description:
-    "Bronxville Natural Market — vitamins, supplements, and natural wellness products with store pickup and local delivery in Bronxville, NY.",
+  description: DEFAULT_DESCRIPTION,
   applicationName: DEFAULT_STORE_CONFIG.name,
   openGraph: {
     type: "website",
     siteName: DEFAULT_STORE_CONFIG.name,
     locale: "en_US",
+    description: DEFAULT_DESCRIPTION,
+    images: [{ url: SOCIAL_IMAGE_PATH, width: 1200, height: 630, alt: SOCIAL_IMAGE_ALT }],
   },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_STORE_CONFIG.name,
+    description: DEFAULT_DESCRIPTION,
+    images: [SOCIAL_IMAGE_PATH],
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#fff9f1",
 };
 
 export default function RootLayout({

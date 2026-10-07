@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CatalogBrowser } from "@/components/catalog/catalog-browser";
+import { pageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = { title: "New Arrivals" };
+export const metadata = pageMetadata(
+  "New Arrivals",
+  "New vitamins and natural supplements at Bronxville Natural Market.",
+  "/new",
+);
 
 export default function NewPage() {
   return (

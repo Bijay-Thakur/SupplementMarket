@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PasswordField } from "@/components/auth/password-field";
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { validateSignUp } from "@/lib/auth/types";
 
 export default function SignUpForm() {
   const router = useRouter();
@@ -18,7 +19,9 @@ export default function SignUpForm() {
   });
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [pending, setPending] = useState(false);
+  const companyRef = useRef<HTMLInputElement>(null);
 
   return (
     <Container className="max-w-md py-12">
@@ -27,15 +30,25 @@ export default function SignUpForm() {
         className="mt-6 space-y-4"
         onSubmit={async (e) => {
           e.preventDefault();
-          setPending(true);
           setError(null);
           setFields({});
+          const problems = validateSignUp({ ...form, acceptedTerms });
+          if (Object.keys(problems).length) {
+            setFields(problems);
+            setError("Please correct the highlighted fields.");
+            return;
+          }
+          setPending(true);
           try {
             const res = await fetch("/api/auth?action=sign-up", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
-              body: JSON.stringify(form),
+              body: JSON.stringify({
+                ...form,
+                acceptedTerms,
+                company: companyRef.current?.value || "",
+              }),
             });
             const data = (await res.json()) as {
               detail?: string;
@@ -48,7 +61,7 @@ export default function SignUpForm() {
               setError(data.detail || "Could not create the account.");
               return;
             }
-            router.push(data.redirectTo || (data.needsVerification ? "/auth/check-email" : "/account"));
+            router.push(data.redirectTo || (data.needsVerification ? "/auth/check-email" : "/products"));
             router.refresh();
           } catch {
             setError("The network request failed. Try again.");
@@ -100,6 +113,25 @@ export default function SignUpForm() {
           onChange={(confirmPassword) => setForm({ ...form, confirmPassword })}
           error={fields.confirmPassword}
         />
+        <div className="hidden" aria-hidden="true">
+          <label htmlFor="company">
+            Company
+            <input ref={companyRef} id="company" name="company" tabIndex={-1} autoComplete="off" />
+          </label>
+        </div>
+        <label className="flex items-start gap-2 text-sm text-[color:var(--brand-ink)]">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4"
+            checked={acceptedTerms}
+            onChange={(event) => setAcceptedTerms(event.target.checked)}
+          />
+          <span>
+            I agree to the <Link href="/terms" className="text-[color:var(--brand-magenta-strong)] underline">Terms</Link> and{" "}
+            <Link href="/privacy" className="text-[color:var(--brand-magenta-strong)] underline">Privacy Policy</Link>.
+          </span>
+        </label>
+        {fields.acceptedTerms ? <p className="text-sm text-[color:var(--danger)]">{fields.acceptedTerms}</p> : null}
         {error && <p className="text-sm text-[color:var(--danger)]">{error}</p>}
         <button type="submit" disabled={pending} className={buttonVariants({ size: "lg", className: "w-full" })}>
           {pending ? "Creating…" : "Create account"}

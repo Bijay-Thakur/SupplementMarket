@@ -258,6 +258,26 @@ BRAND_SOURCES: dict[str, dict[str, Any]] = {
         "official_urls": ("https://www.nordic.com", "https://store.nordic.com"),
         "official_domains": ("nordic.com", "nordicnaturals.com", "ctfassets.net"),
     },
+    "carlson": {
+        "name": "Carlson",
+        "official_urls": ("https://www.carlsonlabs.com",),
+        "official_domains": ("carlsonlabs.com", "cdn11.bigcommerce.com"),
+    },
+    "life-extension": {
+        "name": "Life Extension",
+        "official_urls": ("https://www.lifeextension.com",),
+        "official_domains": ("lifeextension.com",),
+    },
+    "terry-naturally": {
+        "name": "Terry Naturally",
+        "official_urls": ("https://www.terrynaturallyvitamins.com",),
+        "official_domains": ("terrynaturallyvitamins.com", "cdn.shopify.com"),
+    },
+    "terry-naturally-animal-health": {
+        "name": "Terry Naturally Animal Health",
+        "official_urls": ("https://www.terrynaturallyvitamins.com",),
+        "official_domains": ("terrynaturallyvitamins.com", "cdn.shopify.com"),
+    },
 }
 
 # Exact UPCs rejected during the generated contact-sheet review. Keeping the
@@ -421,6 +441,72 @@ SOURCE_CATEGORY_MAP: dict[str, dict[str, str]] = {
         "Omega-3": "Omega Oils",
         "Omega-3/6/9 Blends": "Omega Oils",
     },
+    "carlson": {
+        "Omega-3 Fish Oils": "Omega Oils",
+        "Omega-3 Multiples": "Omega Oils",
+        "Omega-3 Algae-Based": "Omega Oils",
+        "Carlson for Kids": "Children's Supplements",
+        "Carlson Pets": "Pet Formula",
+        "Eye Care": "Eye Health",
+        "Cardiovascular Formulas": "Heart Wellness",
+        "Digestive Aid": "Digestive Health",
+        "Multiples": "Multivitamins",
+        "Concentrates & Nutrients": "Specialties",
+        "Special Formulas": "Specialties",
+        "Vitamin E Body Care": "Body Care",
+        "Gummy Vitamins": "Vitamins",
+        "Empty Capsules in Bottles": "Accessories",
+        "Display Boxes": "Accessories",
+    },
+    "life-extension": {
+        "Brain health": "Brain Health",
+        "Memory cognition": "Brain Health",
+        "Attention focus": "Brain Health",
+        "Active lifestyle fitness": "Sports Nutrition",
+        "Immune support": "Immune Support",
+        "Immune seasonal support": "Immune Support",
+        "Heart health": "Heart Wellness",
+        "Blood pressure vascular health": "Heart Wellness",
+        "Cholesterol management": "Heart Wellness",
+        "Anti-aging longevity": "Healthy Aging",
+        "General health wellness": "General Wellness",
+        "Bone health": "Bone & Joint",
+        "Joint health": "Bone & Joint",
+        "Aging joints": "Bone & Joint",
+        "Sleep": "Sleep",
+        "Liver health detoxification": "Cleansing & Detox",
+        "Energy management": "Energy",
+        "Inflammation management": "Specialties",
+        "Hormone balance": "Men & Women Health",
+        "Glucose management blood sugar": "Specialties",
+        "Stress management": "Stress",
+        "Weight management": "Diet Formulas",
+        "Thyroid adrenal": "Specialties",
+        "Mood support": "Mood & Sleep",
+        "Eye health": "Eye Health",
+        "Womens health": "Men & Women Health",
+        "Womens hormone health": "Men & Women Health",
+        "Womens sexual health": "Men & Women Health",
+        "Mens health": "Men & Women Health",
+        "Mens hormone health": "Men & Women Health",
+        "Mens sexual health": "Men & Women Health",
+        "Prostate health": "Men & Women Health",
+        "Skin care": "Skin Care",
+        "Skin care special purpose": "Skin Care",
+        "Skin care moisturizers": "Moisturizer",
+        "Hair nails": "Hair, Skin & Nails",
+        "Microbiome": "Probiotics",
+        "Digestive health": "Digestive Health",
+        "Gastric discomfort": "Digestive Health",
+        "Gi health": "Digestive Health",
+        "Nerve health comfort support": "Specialties",
+        "Oral care": "Body Care",
+        "Health urinary tract": "Specialties",
+        "Bladder support": "Specialties",
+        "Lung respitory": "Respiratory",
+        "Uric acid management": "Specialties",
+        "Head discomfort": "Specialties",
+    },
 }
 
 
@@ -429,6 +515,8 @@ def source_category(brand_slug: str, product_name: str, supplied: str) -> str:
     mapped = SOURCE_CATEGORY_MAP.get(brand_slug, {}).get(supplied)
     if mapped:
         return mapped
+    if brand_slug == "terry-naturally-animal-health":
+        return "Pet Formula"
     if brand_slug == "new-chapter" and supplied == "Take Care":
         return "Heart Wellness" if re.search(r"blood pressure", product_name, re.I) else "Bone & Joint"
     if brand_slug == "nordic-naturals" and supplied == "Specialty Formulations":
@@ -555,7 +643,7 @@ def variant_image(product: dict[str, Any], variant: dict[str, Any]) -> str:
 
 
 def official_catalog(config: dict[str, Any]) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
-    by_upc: dict[str, dict[str, str]] = {}
+    by_identifier: dict[str, dict[str, str]] = {}
     scanned = 0
     endpoints: list[dict[str, Any]] = []
     with httpx.Client(follow_redirects=True, headers={"User-Agent": USER_AGENT}, timeout=30) as client:
@@ -576,24 +664,37 @@ def official_catalog(config: dict[str, Any]) -> tuple[dict[str, dict[str, str]],
                     for product in products:
                         for variant in product.get("variants") or []:
                             upc = digits(variant.get("barcode"))
+                            supplier_sku = str(variant.get("sku") or "").strip()
                             url = variant_image(product, variant)
-                            if len(upc) != 12 or not url:
+                            if not url:
                                 continue
                             if url.startswith("//"):
                                 url = f"https:{url}"
-                            by_upc[upc] = {
+                            candidate = {
                                 "image_url": url,
                                 "source_url": f"{base_url.rstrip('/')}/products/{product.get('handle')}",
                                 "title": str(product.get("title") or ""),
                                 "source_kind": "official",
                                 "score": "1000",
                             }
+                            if len(upc) == 12:
+                                by_identifier[upc] = candidate
+                            if supplier_sku:
+                                by_identifier[f"supplier-{slugify(supplier_sku)}"] = {
+                                    **candidate,
+                                    "source_identifier": supplier_sku,
+                                }
                     if len(products) < 250:
                         break
             except (httpx.HTTPError, ValueError, TypeError):
                 pass
             endpoints.append({"url": endpoint, "products": endpoint_count})
-    return by_upc, {"products_scanned": scanned, "exact_upc_images": len(by_upc), "endpoints": endpoints}
+    return by_identifier, {
+        "products_scanned": scanned,
+        "exact_upc_images": sum(1 for key in by_identifier if not key.startswith("supplier-")),
+        "exact_supplier_sku_images": sum(1 for key in by_identifier if key.startswith("supplier-")),
+        "endpoints": endpoints,
+    }
 
 
 def search_candidates(client: httpx.Client, row: dict[str, str]) -> list[dict[str, str]]:
@@ -643,6 +744,12 @@ def meaningful_tokens(value: str) -> set[str]:
 def candidate_score(row: dict[str, str], candidate: dict[str, str], config: dict[str, Any]) -> int:
     if candidate.get("source_kind") == "official_override":
         return 2000
+    if (
+        candidate.get("source_kind") == "official"
+        and row.get("supplier_sku")
+        and candidate.get("source_identifier") == row["supplier_sku"]
+    ):
+        return 1000
     joined = " ".join(candidate.values()).casefold()
     joined_digits = digits(joined)
     source_identifier = row["upc"] or row.get("supplier_sku") or row.get("sku") or ""
@@ -764,6 +871,9 @@ def enrich_images(
             candidates.append(IMAGE_OVERRIDES[row["upc"]])
         if row["upc"] and row["upc"] in official:
             candidates.append(official[row["upc"]])
+        supplier_key = f"supplier-{slugify(row.get('supplier_sku') or '')}"
+        if row.get("supplier_sku") and supplier_key in official:
+            candidates.append(official[supplier_key])
         with httpx.Client(
             limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
             headers={"User-Agent": USER_AGENT},

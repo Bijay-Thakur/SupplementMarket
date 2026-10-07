@@ -92,7 +92,7 @@ export function AccountProfile({ user }: { user: AuthUser }) {
         />
         {form.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={form.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
+          <img src={form.avatarUrl} alt="Your profile photo" className="h-20 w-20 rounded-full object-cover" />
         ) : null}
         {error ? <p className="text-sm text-[color:var(--danger)]">{error}</p> : null}
         {message ? <p className="text-sm text-[color:var(--brand-green)]">{message}</p> : null}

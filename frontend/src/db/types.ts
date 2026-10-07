@@ -39,6 +39,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      supplement_requests: {
+        Row: import("@/lib/requests/schema").SupplementRequest & { request_key: string; user_id: string | null; client_hash: string }
+        Insert: never
+        Update: { status?: import("@/lib/requests/schema").SupplementRequest["status"] }
+        Relationships: []
+      }
       brands: {
         Row: {
           created_at: string
@@ -794,6 +800,11 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      catalog_browse_page: { Args: { filters: Json }; Returns: Json }
+      submit_supplement_request: {
+        Args: { payload: Json; requester: string | null; client_fingerprint: string }
+        Returns: string
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       submit_order_request: {
